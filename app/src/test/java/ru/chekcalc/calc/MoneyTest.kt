@@ -18,4 +18,9 @@ class MoneyTest {
     fun `минус остаётся перед числом`() {
         assertEquals("−128 ₽", Money.format(-12_800))
     }
+
+    @Test
+    fun `минимальный Long не ломает формат`() {
+        assertEquals("−92233720368547758,08 ₽", Money.format(Long.MIN_VALUE))
+    }
 }
