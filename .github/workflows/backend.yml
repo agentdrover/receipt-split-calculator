@@ -1,0 +1,33 @@
+name: backend
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Зависимости
+        run: uv sync --frozen
+
+      - name: Линтер
+        run: uv run ruff check .
+
+      - name: Тесты
+        run: uv run pytest -q
