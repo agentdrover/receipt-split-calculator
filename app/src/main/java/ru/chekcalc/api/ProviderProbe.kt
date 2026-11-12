@@ -24,13 +24,14 @@ class ProviderProbe(
 ) {
     fun check(baseUrl: String, apiKey: String): ProbeResult {
         val url = baseUrl.trim().trimEnd('/') + "/models"
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $apiKey")
-            .get()
-            .build()
 
         return try {
+            val request = Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $apiKey")
+                .get()
+                .build()
+
             client.newCall(request).execute().use { response ->
                 when (response.code) {
                     200 -> ProbeResult.Ok
@@ -38,6 +39,8 @@ class ProviderProbe(
                     else -> ProbeResult.Failed("Провайдер ответил HTTP ${response.code}")
                 }
             }
+        } catch (error: IllegalArgumentException) {
+            ProbeResult.Failed("Некорректный адрес провайдера")
         } catch (error: IOException) {
             ProbeResult.Failed("Нет связи с провайдером")
         }

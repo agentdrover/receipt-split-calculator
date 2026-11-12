@@ -56,6 +56,20 @@ class ProviderProbeTest {
     }
 
     @Test
+    fun `пустой адрес не роняет приложение`() {
+        val result = probe.check("", "sk-test")
+
+        assertTrue(result is ProbeResult.Failed)
+    }
+
+    @Test
+    fun `кривой адрес не роняет приложение`() {
+        val result = probe.check("https://?", "sk-test")
+
+        assertTrue(result is ProbeResult.Failed)
+    }
+
+    @Test
     fun `недоступный провайдер даёт понятную ошибку`() {
         server.shutdown()
 
