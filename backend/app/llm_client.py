@@ -7,6 +7,7 @@
 import base64
 import json
 import os
+import time
 
 import httpx
 from pydantic import ValidationError
@@ -16,6 +17,9 @@ from app.schemas.receipt import Receipt
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_TIMEOUT = 25.0
+# Ответ провайдера — несколько килобайт JSON. Потолок защищает от
+# сломанного прокси, который пришлёт гигабайт и съест память процесса.
+MAX_PROVIDER_BYTES = 1024 * 1024
 
 PROMPT = (
     "Распознай фискальный чек на фото и верни строго JSON по схеме receipt.v1: "
@@ -91,23 +95,33 @@ class VisionClient:
                 }
             ],
         }
+        started = time.monotonic()
         try:
             with httpx.Client(timeout=self._timeout, transport=self._transport) as http:
-                response = http.post(
+                with http.stream(
+                    "POST",
                     f"{self._base_url}/chat/completions",
                     json=payload,
                     headers={"Authorization": f"Bearer {self._api_key}"},
-                )
+                ) as response:
+                    status = response.status_code
+                    raw = bytearray()
+                    for chunk in response.iter_bytes():
+                        raw.extend(chunk)
+                        if len(raw) > MAX_PROVIDER_BYTES:
+                            raise ProviderFailed("provider response too large")
+                        if time.monotonic() - started > self._timeout:
+                            raise ProviderFailed("provider deadline exceeded")
         except httpx.HTTPError as exc:
             raise ProviderFailed(f"network error: {exc}") from exc
 
-        if response.status_code != 200:
-            raise ProviderFailed(f"provider status {response.status_code}")
+        if status != 200:
+            raise ProviderFailed(f"provider status {status}")
 
         try:
-            payload = response.json()
-            content = payload["choices"][0]["message"]["content"]
-            self.last_usage = payload.get("usage")
+            answer = json.loads(bytes(raw))
+            content = answer["choices"][0]["message"]["content"]
+            self.last_usage = answer.get("usage")
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise ProviderFailed("unexpected provider payload") from exc
 

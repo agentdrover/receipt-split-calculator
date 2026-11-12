@@ -1,6 +1,7 @@
 """Распознавание чека: фото на входе, receipt.v1 на выходе."""
 
 import logging
+import threading
 import time
 from collections import defaultdict, deque
 from typing import Annotated
@@ -25,7 +26,9 @@ END_PATH = "/api/v1/receipts/recognize"
 logger = logging.getLogger("receipts.recognize")
 
 # Счётчик живёт в памяти процесса: сервис один, база ни к чему.
+# Эндпоинт синхронный и выполняется в пуле потоков, поэтому словарь под замком.
 _RECENT: dict[str, deque[float]] = defaultdict(deque)
+_LOCK = threading.Lock()
 
 
 class BodyTooLarge(Exception):
@@ -46,9 +49,10 @@ def content_length_exceeded(content_length: str | None) -> bool:
 class BodyLimitMiddleware:
     """Потолок тела для одного маршрута.
 
-    Одного Content-Length мало: клиент вправе прислать chunked без заголовка,
-    и тогда Starlette пишет файл на диск, пока не кончится место. Считаем
-    байты на приёме и рвём чтение — в этом случае ответ ещё не начат.
+    Одного Content-Length мало: клиент вправе прислать chunked без заголовка.
+    Читаем тело сами, не больше лимита, и отдаём разборщику уже из памяти —
+    иначе Starlette пишет файл на диск, а его ошибка разбора превращает наш
+    413 в 400.
     """
 
     def __init__(self, app, max_bytes: int = MAX_UPLOAD_BYTES, path: str = END_PATH) -> None:
@@ -67,21 +71,33 @@ class BodyLimitMiddleware:
             await _too_large(scope, receive, send)
             return
 
+        chunks: list[bytes] = []
         received = 0
-
-        async def limited_receive():
-            nonlocal received
+        while True:
             message = await receive()
-            if message["type"] == "http.request":
-                received += len(message.get("body", b""))
-                if received > self.max_bytes:
-                    raise BodyTooLarge
-            return message
+            if message["type"] != "http.request":
+                await _too_large(scope, receive, send)
+                return
+            body = message.get("body", b"")
+            received += len(body)
+            if received > self.max_bytes:
+                await _too_large(scope, receive, send)
+                return
+            chunks.append(body)
+            if not message.get("more_body", False):
+                break
 
-        try:
-            await self.app(scope, limited_receive, send)
-        except BodyTooLarge:
-            await _too_large(scope, receive, send)
+        buffered = b"".join(chunks)
+        replayed = False
+
+        async def replay():
+            nonlocal replayed
+            if replayed:
+                return {"type": "http.disconnect"}
+            replayed = True
+            return {"type": "http.request", "body": buffered, "more_body": False}
+
+        await self.app(scope, replay, send)
 
 
 async def _too_large(scope, receive, send) -> None:
@@ -110,14 +126,15 @@ def _allow(installation_id: str, now: float | None = None) -> float | None:
     """None — запрос можно; иначе сколько секунд ждать до освобождения окна."""
     moment = time.monotonic() if now is None else now
     window_start = moment - RATE_WINDOW_SECONDS
-    _prune(window_start)
-    hits = _RECENT[installation_id]
-    while hits and hits[0] < window_start:
-        hits.popleft()
-    if len(hits) >= RATE_LIMIT:
-        return max(1.0, hits[0] + RATE_WINDOW_SECONDS - moment)
-    hits.append(moment)
-    _evict_over_cap()
+    with _LOCK:
+        _prune(window_start)
+        hits = _RECENT[installation_id]
+        while hits and hits[0] < window_start:
+            hits.popleft()
+        if len(hits) >= RATE_LIMIT:
+            return max(1.0, hits[0] + RATE_WINDOW_SECONDS - moment)
+        hits.append(moment)
+        _evict_over_cap()
     return None
 
 

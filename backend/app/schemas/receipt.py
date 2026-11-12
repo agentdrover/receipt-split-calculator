@@ -39,8 +39,8 @@ class Receipt(BaseModel):
 
     merchant: str | None = None
     date: datetime | None = None
-    currency: str = "RUB"
-    items: list[ReceiptItem] = Field(default_factory=list)
+    currency: str
+    items: list[ReceiptItem]
     discount: Discount = Field(default_factory=Discount)
     service_charge: ServiceCharge = Field(default_factory=ServiceCharge)
     total: Number = Field(ge=0)

@@ -8,10 +8,13 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app import llm_client
 from app.api import receipts
 from app.llm_client import LlmNotConfigured, ProviderFailed, UnreadableReceipt, VisionClient
 from app.main import create_app
 from app.schemas.receipt import Receipt
+
+EMPTY_RECEIPT_JSON = json.dumps({"items": [], "total": 0, "currency": "RUB"})
 
 VALID_PAYLOAD = {
     "merchant": "Кофемания",
@@ -29,10 +32,11 @@ VALID_PAYLOAD = {
 
 
 class FakeClient:
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, usage=None):
         self.result = result
         self.error = error
         self.calls = 0
+        self.last_usage = usage
 
     def recognize(self, image: bytes, mime: str) -> Receipt:
         self.calls += 1
@@ -176,7 +180,7 @@ def test_provider_empty_items_are_unreadable(client, monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={"choices": [{"message": {"content": json.dumps({"items": [], "total": 0})}}]},
+            json={"choices": [{"message": {"content": EMPTY_RECEIPT_JSON}}]},
         )
 
     vision = VisionClient(
@@ -273,7 +277,10 @@ def test_chunked_body_without_content_length_is_rejected():
 
 
 def test_success_is_logged_without_positions(client, monkeypatch, caplog):
-    fake = FakeClient(result=Receipt.model_validate(VALID_PAYLOAD))
+    fake = FakeClient(
+        result=Receipt.model_validate(VALID_PAYLOAD),
+        usage={"prompt_tokens": 123, "completion_tokens": 45},
+    )
     monkeypatch.setattr(receipts, "get_client", lambda: fake)
 
     with caplog.at_level(logging.INFO, logger="receipts.recognize"):
@@ -282,4 +289,102 @@ def test_success_is_logged_without_positions(client, monkeypatch, caplog):
     text = " ".join(record.getMessage() for record in caplog.records)
     assert "status=200" in text
     assert "duration_ms=" in text
+    assert "prompt_tokens" in text
     assert "Капучино" not in text
+
+
+def test_rate_limit_isolated_per_installation(client, monkeypatch):
+    fake = FakeClient(result=Receipt.model_validate(VALID_PAYLOAD))
+    monkeypatch.setattr(receipts, "get_client", lambda: fake)
+
+    for _ in range(receipts.RATE_LIMIT):
+        assert _post(client).status_code == 200
+
+    assert _post(client).status_code == 429
+    assert _post(client, installation_id="dev-other").status_code == 200
+
+
+def test_rate_limit_window_resets(monkeypatch):
+    moment = 5_000.0
+    for _ in range(receipts.RATE_LIMIT):
+        assert receipts._allow("dev-window", now=moment) is None
+    assert receipts._allow("dev-window", now=moment) is not None
+
+    later = moment + receipts.RATE_WINDOW_SECONDS + 1
+    assert receipts._allow("dev-window", now=later) is None
+
+
+def test_client_recovers_on_second_attempt():
+    """Первый ответ мусорный, второй валидный: повтор обязан его вернуть."""
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200, json={"choices": [{"message": {"content": "не json"}}]})
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": json.dumps(VALID_PAYLOAD)}}]}
+        )
+
+    vision = VisionClient(
+        base_url="https://example.test/v1",
+        model="m",
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+    )
+
+    receipt = vision.recognize(b"img", "image/jpeg")
+
+    assert calls["n"] == 2
+    assert receipt.items[0].name == "Капучино"
+
+
+def test_client_schema_failure_twice_is_provider_failed():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": json.dumps({"items": []})}}]}
+        )
+
+    vision = VisionClient(
+        base_url="https://example.test/v1",
+        model="m",
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderFailed):
+        vision.recognize(b"img", "image/jpeg")
+
+    assert calls["n"] == 2
+
+
+def test_empty_upload_is_422_without_provider_call(client, monkeypatch):
+    fake = FakeClient(result=Receipt.model_validate(VALID_PAYLOAD))
+    monkeypatch.setattr(receipts, "get_client", lambda: fake)
+
+    response = _post(client, content=b"")
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "empty"
+    assert fake.calls == 0
+
+
+def test_provider_oversized_response_is_refused():
+    """Гигабайт от сломанного прокси не должен съесть память."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        big = "x" * (llm_client.MAX_PROVIDER_BYTES + 10)
+        return httpx.Response(200, json={"choices": [{"message": {"content": big}}]})
+
+    vision = VisionClient(
+        base_url="https://example.test/v1",
+        model="m",
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderFailed):
+        vision.recognize(b"img", "image/jpeg")
