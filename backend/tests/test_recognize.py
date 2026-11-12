@@ -536,3 +536,11 @@ def test_logging_reports_provider_usage(client, monkeypatch, caplog):
 
     text = " ".join(record.getMessage() for record in caplog.records)
     assert "111" in text and "22" in text
+
+
+def test_application_logging_is_enabled(client):
+    """Без этого uvicorn глушит INFO-записи распознавания."""
+    logger = logging.getLogger("receipts.recognize")
+
+    assert logger.isEnabledFor(logging.INFO) is True
+    assert logging.getLogger("receipts").handlers
