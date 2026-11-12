@@ -61,6 +61,7 @@ class VisionClient:
         self._api_key = api_key
         self._timeout = timeout
         self._transport = transport
+        self.last_usage: dict | None = None
 
     def recognize(self, image: bytes, mime: str) -> Receipt:
         """Распознаёт чек; невалидный ответ модели повторяет один раз."""
@@ -104,7 +105,9 @@ class VisionClient:
             raise ProviderFailed(f"provider status {response.status_code}")
 
         try:
-            content = response.json()["choices"][0]["message"]["content"]
+            payload = response.json()
+            content = payload["choices"][0]["message"]["content"]
+            self.last_usage = payload.get("usage")
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise ProviderFailed("unexpected provider payload") from exc
 

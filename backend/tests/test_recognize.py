@@ -1,6 +1,8 @@
 """Тесты эндпоинта распознавания: провайдер везде замокан."""
 
+import asyncio
 import json
+import logging
 
 import httpx
 import pytest
@@ -84,7 +86,7 @@ def test_empty_items_are_unreadable(client, monkeypatch):
     response = _post(client)
 
     assert response.status_code == 422
-    assert response.json()["detail"]["error"] == "unreadable"
+    assert response.json()["error"] == "unreadable"
 
 
 def test_provider_failure_is_502(client, monkeypatch):
@@ -94,7 +96,7 @@ def test_provider_failure_is_502(client, monkeypatch):
     response = _post(client)
 
     assert response.status_code == 502
-    assert response.json()["detail"]["error"] == "provider_failed"
+    assert response.json()["error"] == "provider_failed"
 
 
 def test_missing_key_is_503(client, monkeypatch):
@@ -106,7 +108,7 @@ def test_missing_key_is_503(client, monkeypatch):
     response = _post(client)
 
     assert response.status_code == 503
-    assert response.json()["detail"]["error"] == "not_configured"
+    assert response.json()["error"] == "not_configured"
 
 
 def test_rate_limit_per_installation(client, monkeypatch):
@@ -118,7 +120,7 @@ def test_rate_limit_per_installation(client, monkeypatch):
 
     limited = _post(client)
     assert limited.status_code == 429
-    assert limited.json()["detail"]["error"] == "rate_limited"
+    assert limited.json()["error"] == "rate_limited"
     assert fake.calls == receipts.RATE_LIMIT
 
 
@@ -129,7 +131,7 @@ def test_oversized_file_is_413(client, monkeypatch):
     response = _post(client, content=b"x" * (receipts.MAX_BYTES + 1))
 
     assert response.status_code == 413
-    assert response.json()["detail"]["error"] == "too_large"
+    assert response.json()["error"] == "too_large"
     assert fake.calls == 0
 
 
@@ -188,7 +190,7 @@ def test_provider_empty_items_are_unreadable(client, monkeypatch):
     response = _post(client)
 
     assert response.status_code == 422
-    assert response.json()["detail"]["error"] == "unreadable"
+    assert response.json()["error"] == "unreadable"
 
 
 def test_receipt_json_uses_numbers(client, monkeypatch):
@@ -211,13 +213,73 @@ def test_content_length_guard():
     assert receipts.content_length_exceeded(str(receipts.MAX_UPLOAD_BYTES + 1)) is True
 
 
-def test_rate_limiter_forgets_stale_installations(monkeypatch):
-    monkeypatch.setattr(receipts, "MAX_TRACKED_INSTALLATIONS", 2)
+def test_rate_limiter_caps_tracked_installations(monkeypatch):
+    """Потолок держится и на живых ключах: ротация id не растит память."""
+    monkeypatch.setattr(receipts, "MAX_TRACKED_INSTALLATIONS", 3)
     moment = 1_000.0
-    for index in range(3):
-        assert receipts._allow(f"dev-{index}", now=moment) is True
+    for index in range(10):
+        assert receipts._allow(f"dev-{index}", now=moment) is None
 
-    later = moment + receipts.RATE_WINDOW_SECONDS + 10
-    assert receipts._allow("dev-new", now=later) is True
+    assert len(receipts._RECENT) <= 3
 
-    assert len(receipts._RECENT) <= 2
+
+def test_rate_limit_returns_retry_after(client, monkeypatch):
+    fake = FakeClient(result=Receipt.model_validate(VALID_PAYLOAD))
+    monkeypatch.setattr(receipts, "get_client", lambda: fake)
+
+    for _ in range(receipts.RATE_LIMIT):
+        assert _post(client).status_code == 200
+
+    limited = _post(client)
+
+    assert limited.status_code == 429
+    assert limited.json()["error"] == "rate_limited"
+    assert int(limited.headers["Retry-After"]) >= 1
+
+
+def test_chunked_body_without_content_length_is_rejected():
+    """Chunked без Content-Length: middleware рвёт чтение на потолке."""
+    consumed = {"bytes": 0}
+
+    async def inner_app(scope, receive, send):
+        while True:
+            message = await receive()
+            consumed["bytes"] += len(message.get("body", b""))
+            if not message.get("more_body", False):
+                break
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    middleware = receipts.BodyLimitMiddleware(inner_app, max_bytes=10)
+    messages = [
+        {"type": "http.request", "body": b"x" * 6, "more_body": True},
+        {"type": "http.request", "body": b"x" * 6, "more_body": True},
+        {"type": "http.request", "body": b"", "more_body": False},
+    ]
+    sent = []
+
+    async def receive():
+        return messages.pop(0)
+
+    async def send(message):
+        sent.append(message)
+
+    asyncio.run(
+        middleware({"type": "http", "path": receipts.END_PATH, "headers": []}, receive, send)
+    )
+
+    assert sent[0]["status"] == 413
+    assert consumed["bytes"] <= 10
+
+
+def test_success_is_logged_without_positions(client, monkeypatch, caplog):
+    fake = FakeClient(result=Receipt.model_validate(VALID_PAYLOAD))
+    monkeypatch.setattr(receipts, "get_client", lambda: fake)
+
+    with caplog.at_level(logging.INFO, logger="receipts.recognize"):
+        assert _post(client).status_code == 200
+
+    text = " ".join(record.getMessage() for record in caplog.records)
+    assert "status=200" in text
+    assert "duration_ms=" in text
+    assert "Капучино" not in text
