@@ -3,3 +3,18 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+
+# Android
+.gradle/
+build/
+local.properties
+
+# локальные чеки для golden set
+.receipts/
+
+# фото чеков: репозиторий публичный
+backend/tests/fixtures/receipts/*.jpg
+backend/tests/fixtures/receipts/*.jpeg
+backend/tests/fixtures/receipts/*.png
+backend/tests/fixtures/receipts/*.heic
+backend/tests/fixtures/receipts/*.webp
