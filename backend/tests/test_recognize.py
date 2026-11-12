@@ -166,3 +166,58 @@ def test_client_validates_and_returns_receipt():
 
     assert isinstance(receipt, Receipt)
     assert receipt.items[0].name == "Капучино"
+
+
+def test_provider_empty_items_are_unreadable(client, monkeypatch):
+    """Пустой items от модели — 422, а не 502: схема пустой чек пропускает."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": json.dumps({"items": [], "total": 0})}}]},
+        )
+
+    vision = VisionClient(
+        base_url="https://example.test/v1",
+        model="m",
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+    )
+    monkeypatch.setattr(receipts, "get_client", lambda: vision)
+
+    response = _post(client)
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["error"] == "unreadable"
+
+
+def test_receipt_json_uses_numbers(client, monkeypatch):
+    """Клиент на Kotlin ждёт числа, а не строки: Decimal сериализуем как float."""
+    fake = FakeClient(result=Receipt.model_validate(VALID_PAYLOAD))
+    monkeypatch.setattr(receipts, "get_client", lambda: fake)
+
+    body = _post(client).json()
+
+    assert isinstance(body["total"], (int, float))
+    assert isinstance(body["items"][0]["amount"], (int, float))
+    assert isinstance(body["items"][0]["qty"], (int, float))
+
+
+def test_content_length_guard():
+    assert receipts.content_length_exceeded(None) is False
+    assert receipts.content_length_exceeded("") is False
+    assert receipts.content_length_exceeded("не число") is False
+    assert receipts.content_length_exceeded(str(receipts.MAX_UPLOAD_BYTES)) is False
+    assert receipts.content_length_exceeded(str(receipts.MAX_UPLOAD_BYTES + 1)) is True
+
+
+def test_rate_limiter_forgets_stale_installations(monkeypatch):
+    monkeypatch.setattr(receipts, "MAX_TRACKED_INSTALLATIONS", 2)
+    moment = 1_000.0
+    for index in range(3):
+        assert receipts._allow(f"dev-{index}", now=moment) is True
+
+    later = moment + receipts.RATE_WINDOW_SECONDS + 10
+    assert receipts._allow("dev-new", now=later) is True
+
+    assert len(receipts._RECENT) <= 2
