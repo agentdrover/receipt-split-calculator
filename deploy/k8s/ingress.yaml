@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: receipts-api
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/proxy-body-size: "9m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - receipts.example.org
+      secretName: receipts-api-tls
+  rules:
+    - host: receipts.example.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: receipts-api
+                port:
+                  name: http
