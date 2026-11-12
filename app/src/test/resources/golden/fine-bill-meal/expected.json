@@ -1,0 +1,80 @@
+{
+  "merchant": "Umami Tapas Bar",
+  "currency": "SGD",
+  "items": [
+    {
+      "name": "CARPACCIO",
+      "qty": 1,
+      "unit_price": 10.0,
+      "amount": 10.0
+    },
+    {
+      "name": "SPARKLING DR.",
+      "qty": 1,
+      "unit_price": 6.0,
+      "amount": 6.0
+    },
+    {
+      "name": "SUMMERH CIPES",
+      "qty": 1,
+      "unit_price": 9.0,
+      "amount": 9.0
+    },
+    {
+      "name": "SPRING ROLL",
+      "qty": 1,
+      "unit_price": 10.0,
+      "amount": 10.0
+    },
+    {
+      "name": "MUSHR+SP SALAD",
+      "qty": 1,
+      "unit_price": 8.0,
+      "amount": 8.0
+    },
+    {
+      "name": "SABLE FISH",
+      "qty": 1,
+      "unit_price": 12.0,
+      "amount": 12.0
+    },
+    {
+      "name": "CHICKEN WINGS",
+      "qty": 1,
+      "unit_price": 8.0,
+      "amount": 8.0
+    },
+    {
+      "name": "EEL & FOIE GRA",
+      "qty": 1,
+      "unit_price": 15.0,
+      "amount": 15.0
+    },
+    {
+      "name": "NATURE LAND",
+      "qty": 1,
+      "unit_price": 5.0,
+      "amount": 5.0
+    },
+    {
+      "name": "CREME BRULEE",
+      "qty": 1,
+      "unit_price": 6.0,
+      "amount": 6.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": null,
+    "amount": 8.23
+  },
+  "total": 97.23,
+  "confidence": null,
+  "warnings": [
+    "GST 6.23 и liquor tax 2.00 — налоги, записаны в service_charge"
+  ]
+}

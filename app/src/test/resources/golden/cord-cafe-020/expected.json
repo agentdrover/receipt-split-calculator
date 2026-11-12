@@ -1,0 +1,50 @@
+{
+  "merchant": null,
+  "currency": "IDR",
+  "items": [
+    {
+      "name": "cashew nuts chkn",
+      "qty": 1.0,
+      "unit_price": 64500.0,
+      "amount": 64500.0
+    },
+    {
+      "name": "garlic pepper beef",
+      "qty": 1.0,
+      "unit_price": 79500.0,
+      "amount": 79500.0
+    },
+    {
+      "name": "red curry beef",
+      "qty": 1.0,
+      "unit_price": 69500.0,
+      "amount": 69500.0
+    },
+    {
+      "name": "phad thai",
+      "qty": 1.0,
+      "unit_price": 64500.0,
+      "amount": 64500.0
+    },
+    {
+      "name": "steamed rice",
+      "qty": 4.0,
+      "unit_price": 11900.0,
+      "amount": 47600.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": null,
+    "amount": 52259.0
+  },
+  "total": 377859.0,
+  "confidence": null,
+  "warnings": [
+    "обслуживание 17908 и налог 34351 записаны в service_charge"
+  ]
+}

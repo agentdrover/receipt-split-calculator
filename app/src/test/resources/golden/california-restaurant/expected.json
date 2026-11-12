@@ -1,0 +1,123 @@
+{
+  "merchant": "Boulevard",
+  "currency": "USD",
+  "items": [
+    {
+      "name": "HENDRICKS",
+      "qty": 1,
+      "unit_price": 8.0,
+      "amount": 8.0
+    },
+    {
+      "name": "BOURBON MANHATN",
+      "qty": 1,
+      "unit_price": 8.75,
+      "amount": 8.75
+    },
+    {
+      "name": "D SOUP",
+      "qty": 1,
+      "unit_price": 13.75,
+      "amount": 13.75
+    },
+    {
+      "name": "D ABALONE",
+      "qty": 1,
+      "unit_price": 19.5,
+      "amount": 19.5
+    },
+    {
+      "name": "D LOBSTER LINGUI",
+      "qty": 1,
+      "unit_price": 18.75,
+      "amount": 18.75
+    },
+    {
+      "name": "D SHORTRIB",
+      "qty": 1,
+      "unit_price": 17.5,
+      "amount": 17.5
+    },
+    {
+      "name": "D SWEETBREADS",
+      "qty": 1,
+      "unit_price": 17.25,
+      "amount": 17.25
+    },
+    {
+      "name": "D LAMB",
+      "qty": 1,
+      "unit_price": 32.0,
+      "amount": 32.0
+    },
+    {
+      "name": "D PORK",
+      "qty": 1,
+      "unit_price": 31.0,
+      "amount": 31.0
+    },
+    {
+      "name": "GL-3 SAINTS PN (1/2)",
+      "qty": 1,
+      "unit_price": 5.5,
+      "amount": 5.5
+    },
+    {
+      "name": "GL SAUV BLANC (1/2)",
+      "qty": 1,
+      "unit_price": 4.25,
+      "amount": 4.25
+    },
+    {
+      "name": "GL-BAROLO (1/2)",
+      "qty": 1,
+      "unit_price": 9.75,
+      "amount": 9.75
+    },
+    {
+      "name": "G- UNITI SYRAH (1/2)",
+      "qty": 1,
+      "unit_price": 5.5,
+      "amount": 5.5
+    },
+    {
+      "name": "POTRERO",
+      "qty": 1,
+      "unit_price": 10.5,
+      "amount": 10.5
+    },
+    {
+      "name": "G-CASTELNAU",
+      "qty": 1,
+      "unit_price": 9.0,
+      "amount": 9.0
+    },
+    {
+      "name": "D BANANAS FOSTER",
+      "qty": 1,
+      "unit_price": 9.5,
+      "amount": 9.5
+    },
+    {
+      "name": "D TRIO",
+      "qty": 1,
+      "unit_price": 9.75,
+      "amount": 9.75
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": null,
+    "amount": 19.57
+  },
+  "total": 249.82,
+  "confidence": null,
+  "warnings": [
+    "налог 19.57 записан в service_charge: в receipt.v1 поля tax нет",
+    "последняя цифра итога на скане смазана; по арифметике 230,25 + 19,57 = 249,82"
+  ]
+}

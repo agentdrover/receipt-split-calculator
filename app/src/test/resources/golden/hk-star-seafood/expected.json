@@ -1,0 +1,68 @@
+{
+  "merchant": "明星海鮮酒家 (北角)",
+  "currency": "HKD",
+  "items": [
+    {
+      "name": "冰室紅豆糕(凍)",
+      "qty": 1,
+      "unit_price": 8.0,
+      "amount": 8.0
+    },
+    {
+      "name": "芝麻糊湯圓(熱)",
+      "qty": 2,
+      "unit_price": 8.0,
+      "amount": 16.0
+    },
+    {
+      "name": "燒雞(隻)",
+      "qty": 1,
+      "unit_price": 168.0,
+      "amount": 168.0
+    },
+    {
+      "name": "蜜椒薯角牛柳粒(例)",
+      "qty": 1,
+      "unit_price": 88.0,
+      "amount": 88.0
+    },
+    {
+      "name": "清蒸大連鮑魚 6隻",
+      "qty": 1,
+      "unit_price": 98.0,
+      "amount": 98.0
+    },
+    {
+      "name": "清蒸大沙巴龍躉(條)",
+      "qty": 1,
+      "unit_price": 178.0,
+      "amount": 178.0
+    },
+    {
+      "name": "白飯",
+      "qty": 4,
+      "unit_price": 13.0,
+      "amount": 52.0
+    },
+    {
+      "name": "晚芥",
+      "qty": 3,
+      "unit_price": 13.0,
+      "amount": 39.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": 10.0,
+    "amount": 64.5
+  },
+  "total": 711.5,
+  "confidence": null,
+  "warnings": [
+    "количество у 芝麻糊湯圓, 白飯 и 晚芥 восстановлено делением суммы на цену"
+  ]
+}

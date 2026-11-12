@@ -1,0 +1,29 @@
+{
+  "merchant": "85°C Daily Cafe",
+  "currency": "TWD",
+  "items": [
+    {
+      "name": "菠蘿",
+      "qty": 1,
+      "unit_price": 20.0,
+      "amount": 20.0
+    },
+    {
+      "name": "蜜瓜哈斯",
+      "qty": 1,
+      "unit_price": 28.0,
+      "amount": 28.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 48.0,
+  "confidence": null,
+  "warnings": []
+}

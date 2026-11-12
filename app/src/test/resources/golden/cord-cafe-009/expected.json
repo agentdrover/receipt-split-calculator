@@ -1,0 +1,23 @@
+{
+  "merchant": null,
+  "currency": "IDR",
+  "items": [
+    {
+      "name": "Bumbu Kaldu Ayam 1",
+      "qty": 1.0,
+      "unit_price": 36000.0,
+      "amount": 36000.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 36000.0,
+  "confidence": null,
+  "warnings": []
+}
