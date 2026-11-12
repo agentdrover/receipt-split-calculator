@@ -1,6 +1,7 @@
 """Тесты эндпоинта распознавания: провайдер везде замокан."""
 
 import asyncio
+import base64
 import json
 import logging
 
@@ -373,11 +374,18 @@ def test_empty_upload_is_422_without_provider_call(client, monkeypatch):
 
 
 def test_provider_oversized_response_is_refused():
-    """Гигабайт от сломанного прокси не должен съесть память."""
+    """Ответ больше потолка отвергается, хотя JSON и схема валидны."""
+    huge_receipt = {
+        "currency": "RUB",
+        "items": [{"name": "Капучино", "qty": 1, "unit_price": 1, "amount": 1}],
+        "total": 1,
+        "warnings": ["я" * 5000 for _ in range(250)],
+    }
 
     def handler(request: httpx.Request) -> httpx.Response:
-        big = "x" * (llm_client.MAX_PROVIDER_BYTES + 10)
-        return httpx.Response(200, json={"choices": [{"message": {"content": big}}]})
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": json.dumps(huge_receipt)}}]}
+        )
 
     vision = VisionClient(
         base_url="https://example.test/v1",
@@ -388,3 +396,143 @@ def test_provider_oversized_response_is_refused():
 
     with pytest.raises(ProviderFailed):
         vision.recognize(b"img", "image/jpeg")
+
+
+def test_get_client_requires_key(monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+
+    with pytest.raises(LlmNotConfigured):
+        llm_client.get_client()
+
+
+def test_get_client_reads_environment(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "secret-key")
+    monkeypatch.setenv("LLM_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("LLM_MODEL", "vision-test")
+
+    client = llm_client.get_client()
+
+    assert client.model == "vision-test"
+    assert client.base_url == "https://example.test/v1"
+
+
+@pytest.mark.parametrize("field", ["currency", "items", "total"])
+def test_client_requires_each_contract_field(field):
+    """Каждое обязательное поле контракта: без него повтор и ProviderFailed."""
+    payload = {key: value for key, value in VALID_PAYLOAD.items() if key != field}
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": json.dumps(payload)}}]}
+        )
+
+    vision = VisionClient(
+        base_url="https://example.test/v1",
+        model="m",
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderFailed):
+        vision.recognize(b"img", "image/jpeg")
+
+    assert calls["n"] == 2
+
+
+def test_client_sends_the_uploaded_image():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": json.dumps(VALID_PAYLOAD)}}]}
+        )
+
+    vision = VisionClient(
+        base_url="https://example.test/v1",
+        model="m",
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+    )
+    vision.recognize(b"\xff\xd8photo-bytes", "image/jpeg")
+
+    image_url = seen["payload"]["messages"][0]["content"][1]["image_url"]["url"]
+    encoded = image_url.split(",", 1)[1]
+
+    assert base64.b64decode(encoded) == b"\xff\xd8photo-bytes"
+
+
+def test_endpoint_passes_uploaded_bytes_to_client(client, monkeypatch):
+    captured = {}
+
+    class Capture:
+        last_usage = None
+
+        def recognize(self, image: bytes, mime: str):
+            captured["image"] = image
+            captured["mime"] = mime
+            return Receipt.model_validate(VALID_PAYLOAD)
+
+    monkeypatch.setattr(receipts, "get_client", lambda: Capture())
+
+    _post(client, content=b"\xff\xd8uploaded")
+
+    assert captured["image"] == b"\xff\xd8uploaded"
+
+
+def test_endpoint_rejects_chunked_body_over_limit(client, monkeypatch):
+    """FastAPI не должен превращать наш 413 в 400 при разборе multipart."""
+    fake = FakeClient(result=Receipt.model_validate(VALID_PAYLOAD))
+    monkeypatch.setattr(receipts, "get_client", lambda: fake)
+
+    def body():
+        yield (
+            b'--b\r\nContent-Disposition: form-data; name="file"; filename="a.jpg"\r\n'
+            b"Content-Type: image/jpeg\r\n\r\n"
+        )
+        for _ in range(20):
+            yield b"x" * (receipts.MAX_UPLOAD_BYTES // 4)
+        yield b"\r\n--b--\r\n"
+
+    response = client.post(
+        "/api/v1/receipts/recognize",
+        content=body(),
+        headers={
+            "Content-Type": "multipart/form-data; boundary=b",
+            "X-Installation-Id": "dev-chunk-endpoint",
+        },
+    )
+
+    assert response.status_code == 413
+    assert response.json()["error"] == "too_large"
+    assert response.headers.get("X-Reject-Reason") == "body_limit"
+    assert fake.calls == 0
+
+
+def test_logging_reports_provider_usage(client, monkeypatch, caplog):
+    """usage приходит из ответа провайдера, а не подставляется фейком."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": json.dumps(VALID_PAYLOAD)}}],
+                "usage": {"prompt_tokens": 111, "completion_tokens": 22},
+            },
+        )
+
+    vision = VisionClient(
+        base_url="https://example.test/v1",
+        model="m",
+        api_key="k",
+        transport=httpx.MockTransport(handler),
+    )
+    monkeypatch.setattr(receipts, "get_client", lambda: vision)
+
+    with caplog.at_level(logging.INFO, logger="receipts.recognize"):
+        assert _post(client).status_code == 200
+
+    text = " ".join(record.getMessage() for record in caplog.records)
+    assert "111" in text and "22" in text

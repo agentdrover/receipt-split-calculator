@@ -67,6 +67,14 @@ class VisionClient:
         self._transport = transport
         self.last_usage: dict | None = None
 
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    @property
+    def model(self) -> str:
+        return self._model
+
     def recognize(self, image: bytes, mime: str) -> Receipt:
         """Распознаёт чек; невалидный ответ модели повторяет один раз."""
         last_error: ProviderFailed | None = None

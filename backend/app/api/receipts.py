@@ -101,7 +101,11 @@ class BodyLimitMiddleware:
 
 
 async def _too_large(scope, receive, send) -> None:
-    await JSONResponse({"error": "too_large"}, status_code=413)(scope, receive, send)
+    # Заголовок отличает отказ по телу от отказа эндпоинта: по нему видно,
+    # что до разбора multipart дело не дошло.
+    await JSONResponse(
+        {"error": "too_large"}, status_code=413, headers={"X-Reject-Reason": "body_limit"}
+    )(scope, receive, send)
 
 
 def _prune(window_start: float) -> None:
