@@ -23,60 +23,86 @@ class SettingsRepositoryTest {
     private val store = InMemorySecretStore()
     private val repository = SettingsRepository(store)
 
+    private fun savePreset(preset: ProviderPreset, key: String, url: String = preset.defaultBaseUrl) =
+        repository.save(ProviderSettings(preset.id, key, url, preset.defaultModel))
+
     @Test
-    fun `ключ сохраняется на https-адрес`() {
+    fun `по умолчанию активен DeepSeek с его адресом и моделью`() {
+        assertEquals(ProviderPreset.DEEPSEEK, repository.activeProvider())
+        assertEquals("https://api.deepseek.com", repository.load().baseUrl)
+        assertEquals("deepseek-flash", repository.load().model)
+    }
+
+    @Test
+    fun `ключ DeepSeek не подставляется в OpenRouter`() {
+        savePreset(ProviderPreset.DEEPSEEK, "sk-deepseek-1111")
+
+        val openRouter = repository.switchTo(ProviderPreset.OPENROUTER)
+
+        assertTrue("ключ чужого провайдера протёк", openRouter.apiKey.isEmpty())
+        assertEquals("https://openrouter.ai/api/v1", openRouter.baseUrl)
+        assertFalse(store.values.values.any { it.contains("1111") && it != "sk-deepseek-1111" })
+    }
+
+    @Test
+    fun `возврат на DeepSeek восстанавливает его ключ`() {
+        savePreset(ProviderPreset.DEEPSEEK, "sk-deepseek-1111")
+        repository.switchTo(ProviderPreset.OPENROUTER)
+        savePreset(ProviderPreset.OPENROUTER, "sk-openrouter-2222")
+
+        val back = repository.switchTo(ProviderPreset.DEEPSEEK)
+
+        assertEquals("sk-deepseek-1111", back.apiKey)
+        assertEquals("https://api.deepseek.com", back.baseUrl)
+        assertEquals("••••1111", repository.maskedKey())
+    }
+
+    @Test
+    fun `ключи провайдеров не пересекаются в хранилище`() {
+        savePreset(ProviderPreset.DEEPSEEK, "sk-deepseek-1111")
+        savePreset(ProviderPreset.OPENROUTER, "sk-openrouter-2222")
+
+        assertTrue(store.values["api_key_deepseek"] == "sk-deepseek-1111")
+        assertTrue(store.values["api_key_openrouter"] == "sk-openrouter-2222")
+    }
+
+    @Test
+    fun `смена адреса стирает ключ только своего провайдера`() {
+        savePreset(ProviderPreset.DEEPSEEK, "sk-deepseek-1111")
+        savePreset(ProviderPreset.CUSTOM, "sk-custom-3333", "https://a.example/v1")
+
         val result = repository.save(
-            ProviderSettings(
-                apiKey = "sk-test-1234",
-                baseUrl = "https://api.example.org/v1",
-                model = "vision-1",
-            ),
+            ProviderSettings(ProviderPreset.CUSTOM.id, "sk-custom-3333", "https://b.example/v1", "m1"),
         )
 
-        assertTrue(result is SaveResult.Saved)
-        assertEquals("sk-test-1234", repository.load().apiKey)
-        assertEquals("https://api.example.org/v1", repository.load().baseUrl)
-        assertEquals("vision-1", repository.load().model)
+        assertTrue((result as SaveResult.Saved).keyReentryRequired)
+        assertTrue(repository.switchTo(ProviderPreset.CUSTOM).apiKey.isEmpty())
+        assertEquals("sk-deepseek-1111", repository.switchTo(ProviderPreset.DEEPSEEK).apiKey)
     }
 
     @Test
     fun `http-адрес отклоняется и ключ не сохраняется`() {
         val result = repository.save(
-            ProviderSettings(apiKey = "sk-test-1234", baseUrl = "http://evil.example/v1"),
+            ProviderSettings(ProviderPreset.CUSTOM.id, "sk-test-1234", "http://evil.example/v1", "m1"),
         )
 
         assertTrue(result is SaveResult.InvalidUrl)
         assertTrue(repository.load().apiKey.isEmpty())
-        assertTrue(store.values.isEmpty())
     }
 
     @Test
-    fun `смена адреса стирает ключ и требует ввода заново`() {
-        repository.save(ProviderSettings("sk-old-9999", "https://a.example/v1"))
+    fun `старые настройки переезжают в своего провайдера`() {
+        store.values["api_key"] = "sk-legacy-9999"
+        store.values["base_url"] = "https://legacy.example/v1"
+        store.values["model"] = "legacy-model"
 
-        val result = repository.save(ProviderSettings("sk-new-1111", "https://b.example/v1"))
+        val settings = repository.load()
 
-        assertTrue(result is SaveResult.Saved)
-        assertTrue((result as SaveResult.Saved).keyReentryRequired)
-        assertTrue(repository.load().apiKey.isEmpty())
-    }
-
-    @Test
-    fun `тот же адрес сохраняет ключ без повторного ввода`() {
-        repository.save(ProviderSettings("sk-keep-7777", "https://a.example/v1"))
-
-        val result = repository.save(ProviderSettings("sk-keep-7777", "https://a.example/v1"))
-
-        assertFalse((result as SaveResult.Saved).keyReentryRequired)
-        assertEquals("sk-keep-7777", repository.load().apiKey)
-    }
-
-    @Test
-    fun `ключ маскируется до последних четырёх символов`() {
-        repository.save(ProviderSettings("sk-secret-4321", "https://a.example/v1"))
-
-        assertEquals("••••4321", repository.maskedKey())
-        assertFalse(repository.maskedKey().contains("secret"))
+        assertEquals(ProviderPreset.CUSTOM, repository.activeProvider())
+        assertEquals("sk-legacy-9999", settings.apiKey)
+        assertEquals("https://legacy.example/v1", settings.baseUrl)
+        assertEquals("legacy-model", settings.model)
+        assertFalse("старые ключи должны быть удалены", store.values.containsKey("api_key"))
     }
 
     @Test

@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.chekcalc.api.ProbeResult
 import ru.chekcalc.api.ProviderProbe
+import ru.chekcalc.storage.ProviderPreset
 import ru.chekcalc.storage.ProviderSettings
 import ru.chekcalc.storage.SaveResult
 import ru.chekcalc.storage.SettingsRepository
@@ -33,22 +38,33 @@ import ru.chekcalc.storage.SettingsRepository
 /**
  * Экран настроек провайдера.
  *
- * Ключ нигде не логируется и не отправляется сам по себе: сеть уходит только
- * по нажатию «Проверить», с сохранёнными настройками и в фоновом потоке.
+ * Провайдер выбирается из списка; у каждого свой адрес, модель и ключ.
+ * Ключ нигде не логируется и уходит в сеть только по кнопке «Проверить»,
+ * с сохранёнными настройками и в фоновом потоке.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     repository: SettingsRepository,
     probe: ProviderProbe = remember { ProviderProbe() },
     onBack: () -> Unit = {},
 ) {
+    var provider by remember { mutableStateOf(repository.activeProvider()) }
     var saved by remember { mutableStateOf(repository.load()) }
     var apiKey by remember { mutableStateOf(saved.apiKey) }
     var baseUrl by remember { mutableStateOf(saved.baseUrl) }
     var model by remember { mutableStateOf(saved.model) }
     var message by remember { mutableStateOf<String?>(null) }
     var checking by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    fun apply(settings: ProviderSettings) {
+        saved = settings
+        apiKey = settings.apiKey
+        baseUrl = settings.baseUrl
+        model = settings.model
+    }
 
     Column(
         modifier = Modifier
@@ -59,35 +75,43 @@ fun SettingsScreen(
         TextButton(onClick = onBack) { Text("Назад") }
         Text("Настройки", style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Приложение ходит к провайдеру напрямую. Ключ хранится только на этом телефоне.",
+            "Приложение ходит к провайдеру напрямую. Ключи хранятся только на этом телефоне, у каждого провайдера свой.",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 8.dp, bottom = 20.dp),
         )
 
-        OutlinedTextField(
-            value = apiKey,
-            onValueChange = { apiKey = it },
-            label = { Text("Ключ провайдера") },
-            singleLine = true,
-            visualTransformation = if (saved.apiKey.isEmpty()) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            text = if (saved.apiKey.isEmpty()) "Ключ не задан" else "Сохранён: ${repository.maskedKey()}",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-        )
+        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+            OutlinedTextField(
+                value = provider.title,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Провайдер") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+            )
+            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                ProviderPreset.entries.forEach { preset ->
+                    DropdownMenuItem(
+                        text = { Text(preset.title) },
+                        onClick = {
+                            expanded = false
+                            provider = preset
+                            apply(repository.switchTo(preset))
+                            message = null
+                        },
+                    )
+                }
+            }
+        }
 
         OutlinedTextField(
             value = baseUrl,
             onValueChange = { baseUrl = it },
             label = { Text("Адрес API (только https)") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
         OutlinedTextField(
@@ -95,18 +119,34 @@ fun SettingsScreen(
             onValueChange = { model = it },
             label = { Text("Модель") },
             singleLine = true,
+            supportingText = provider.modelHint?.let { { Text(it) } },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+
+        OutlinedTextField(
+            value = apiKey,
+            onValueChange = { apiKey = it },
+            label = { Text("Ключ ${provider.title}") },
+            singleLine = true,
+            visualTransformation = if (saved.apiKey.isEmpty()) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+        Text(
+            text = if (saved.apiKey.isEmpty()) "Ключ не задан" else "Сохранён: ${repository.maskedKey()}",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp),
         )
 
         Button(
             onClick = {
-                when (val result = repository.save(ProviderSettings(apiKey, baseUrl, model))) {
+                when (val result = repository.save(ProviderSettings(provider.id, apiKey, baseUrl, model))) {
                     is SaveResult.InvalidUrl -> message = result.reason
                     is SaveResult.Saved -> {
-                        saved = repository.load()
-                        apiKey = saved.apiKey
-                        baseUrl = saved.baseUrl
-                        model = saved.model
+                        apply(repository.load())
                         message = if (result.keyReentryRequired) {
                             "Адрес изменён — введите ключ заново"
                         } else {
