@@ -1,0 +1,43 @@
+{
+  "merchant": "McDonald's 昆明",
+  "currency": "TWD",
+  "items": [
+    {
+      "name": "有氧豬滿蛋餐",
+      "qty": 1,
+      "unit_price": 52.0,
+      "amount": 52.0
+    },
+    {
+      "name": "焦糖冰奶茶",
+      "qty": 1,
+      "unit_price": 45.0,
+      "amount": 45.0
+    },
+    {
+      "name": "超早豬滿蛋",
+      "qty": 1,
+      "unit_price": 32.0,
+      "amount": 32.0
+    },
+    {
+      "name": "經典冰咖啡",
+      "qty": 1,
+      "unit_price": 45.0,
+      "amount": 45.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 174.0,
+  "confidence": null,
+  "warnings": [
+    "модификаторы 少冰, 增加奶精, 增加糖 — не позиции"
+  ]
+}

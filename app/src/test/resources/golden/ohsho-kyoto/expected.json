@@ -1,0 +1,37 @@
+{
+  "merchant": "餃子の王将",
+  "currency": "JPY",
+  "items": [
+    {
+      "name": "中華そば",
+      "qty": 1,
+      "unit_price": 748.0,
+      "amount": 748.0
+    },
+    {
+      "name": "特選セットA",
+      "qty": 1,
+      "unit_price": 1120.0,
+      "amount": 1120.0
+    },
+    {
+      "name": "特セット餃子+3個",
+      "qty": 1,
+      "unit_price": 165.0,
+      "amount": 165.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 2033.0,
+  "confidence": null,
+  "warnings": [
+    "внешний налог 外税 = 0"
+  ]
+}

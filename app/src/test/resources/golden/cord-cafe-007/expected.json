@@ -1,0 +1,32 @@
+{
+  "merchant": null,
+  "currency": "IDR",
+  "items": [
+    {
+      "name": "Kupon 15",
+      "qty": 1.0,
+      "unit_price": 100000.0,
+      "amount": 100000.0
+    },
+    {
+      "name": "ADD CHICKEN BOX",
+      "qty": 1.0,
+      "unit_price": 909.0,
+      "amount": 909.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": null,
+    "amount": 10091.0
+  },
+  "total": 111000.0,
+  "confidence": null,
+  "warnings": [
+    "налог 10091 записан в service_charge: в receipt.v1 поля tax нет"
+  ]
+}

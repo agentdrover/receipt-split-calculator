@@ -1,0 +1,26 @@
+{
+  "merchant": "Vinayang Restaurant & Bar",
+  "currency": "NPR",
+  "items": [
+    {
+      "name": "KUKHURA KO MASHU",
+      "qty": 1,
+      "unit_price": 595.0,
+      "amount": 595.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": null,
+    "amount": 144.59
+  },
+  "total": 739.59,
+  "confidence": null,
+  "warnings": [
+    "service charge 59.50 и 13% VAT 85.09 записаны в service_charge: в receipt.v1 поля tax нет"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "merchant": null,
+  "currency": "KRW",
+  "items": [
+    {
+      "name": "페퍼로니 액 접스",
+      "qty": 1,
+      "unit_price": 29000.0,
+      "amount": 29000.0
+    },
+    {
+      "name": "토마토 파스타",
+      "qty": 1,
+      "unit_price": 14000.0,
+      "amount": 14000.0
+    },
+    {
+      "name": "수제 돈가스",
+      "qty": 1,
+      "unit_price": 13000.0,
+      "amount": 13000.0
+    },
+    {
+      "name": "새우 실시지 볶리",
+      "qty": 1,
+      "unit_price": 14000.0,
+      "amount": 14000.0
+    },
+    {
+      "name": "콜라",
+      "qty": 3,
+      "unit_price": 2000.0,
+      "amount": 6000.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 76000.0,
+  "confidence": null,
+  "warnings": [
+    "부가세 6 906 уже внутри итога",
+    "две строки напечатаны неразборчиво: 페퍼로니 액 접스, 새우 실시지 볶리"
+  ]
+}

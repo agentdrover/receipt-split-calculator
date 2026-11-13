@@ -1,0 +1,32 @@
+{
+  "merchant": "McDonald's 基隆信一",
+  "currency": "TWD",
+  "items": [
+    {
+      "name": "杯餐大薯雙層牛",
+      "qty": 1,
+      "unit_price": 104.0,
+      "amount": 104.0
+    },
+    {
+      "name": "可樂-大",
+      "qty": 1,
+      "unit_price": 40.0,
+      "amount": 40.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": null,
+    "amount": 35.0
+  },
+  "total": 179.0,
+  "confidence": null,
+  "warnings": [
+    "歡樂送外送費 35 — доставка, записана в service_charge"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "merchant": null,
+  "currency": "IDR",
+  "items": [
+    {
+      "name": "ICE BLACKCOFFE",
+      "qty": 2.0,
+      "unit_price": 41000.0,
+      "amount": 82000.0
+    },
+    {
+      "name": "AVOCADO COFFEE",
+      "qty": 1.0,
+      "unit_price": 61000.0,
+      "amount": 61000.0
+    },
+    {
+      "name": "CHIKEN KATSU FF",
+      "qty": 1.0,
+      "unit_price": 51000.0,
+      "amount": 51000.0
+    }
+  ],
+  "discount": {
+    "present": true,
+    "amount": 19400.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 174600.0,
+  "confidence": null,
+  "warnings": []
+}

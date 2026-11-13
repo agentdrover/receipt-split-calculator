@@ -1,0 +1,23 @@
+{
+  "merchant": "ООО Электротранспорт, Набережные Челны",
+  "currency": "RUB",
+  "items": [
+    {
+      "name": "Билет на трамвай, маршрут 10",
+      "qty": 1,
+      "unit_price": 20.0,
+      "amount": 20.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 20.0,
+  "confidence": null,
+  "warnings": []
+}

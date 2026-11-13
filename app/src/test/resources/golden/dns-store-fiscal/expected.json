@@ -1,0 +1,25 @@
+{
+  "merchant": "DNS 2350, Ростов-на-Дону",
+  "currency": "RUB",
+  "items": [
+    {
+      "name": "Смартфон BQ 5565L FEST 2/16GB [5,45/LTE/2Mpx/2200/Black] (Гарантия - 12 мес)",
+      "qty": 1,
+      "unit_price": 4199.0,
+      "amount": 4199.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 4199.0,
+  "confidence": null,
+  "warnings": [
+    "в чеке НДС 20% = 699.83, он уже внутри суммы"
+  ]
+}

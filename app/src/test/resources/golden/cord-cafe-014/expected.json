@@ -1,0 +1,56 @@
+{
+  "merchant": null,
+  "currency": "IDR",
+  "items": [
+    {
+      "name": "RedVelvet Cheese Slc",
+      "qty": 1.0,
+      "unit_price": 38000.0,
+      "amount": 38000.0
+    },
+    {
+      "name": "Chicken Baked Rice",
+      "qty": 1.0,
+      "unit_price": 55000.0,
+      "amount": 55000.0
+    },
+    {
+      "name": "Fish n Chips",
+      "qty": 1.0,
+      "unit_price": 65000.0,
+      "amount": 65000.0
+    },
+    {
+      "name": "Mushroom Soup",
+      "qty": 1.0,
+      "unit_price": 35000.0,
+      "amount": 35000.0
+    },
+    {
+      "name": "Chamomile",
+      "qty": 1.0,
+      "unit_price": 25000.0,
+      "amount": 25000.0
+    },
+    {
+      "name": "Iced Tea",
+      "qty": 1.0,
+      "unit_price": 20000.0,
+      "amount": 20000.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": null,
+    "amount": 43435.0
+  },
+  "total": 281435.0,
+  "confidence": null,
+  "warnings": [
+    "обслуживание 17 850 и налог 25 585 записаны в service_charge: в receipt.v1 одного поля на них нет"
+  ]
+}

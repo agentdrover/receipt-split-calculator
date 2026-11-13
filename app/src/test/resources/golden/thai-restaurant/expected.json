@@ -1,0 +1,97 @@
+{
+  "merchant": "Northern Thai Cuisine, Chiang Mai",
+  "currency": "THB",
+  "items": [
+    {
+      "name": "จอผักกาด",
+      "qty": 2,
+      "unit_price": 73.0,
+      "amount": 146.0
+    },
+    {
+      "name": "แกงฮังเล",
+      "qty": 1,
+      "unit_price": 73.0,
+      "amount": 73.0
+    },
+    {
+      "name": "ลาบหมูตั๋ว",
+      "qty": 1,
+      "unit_price": 67.0,
+      "amount": 67.0
+    },
+    {
+      "name": "ตำขนุน",
+      "qty": 1,
+      "unit_price": 67.0,
+      "amount": 67.0
+    },
+    {
+      "name": "ผักหวานผัดไข่",
+      "qty": 2,
+      "unit_price": 83.0,
+      "amount": 166.0
+    },
+    {
+      "name": "ข้าวเหนียว",
+      "qty": 6,
+      "unit_price": 23.0,
+      "amount": 138.0
+    },
+    {
+      "name": "แกงตั๋วเห็ดฟาง",
+      "qty": 2,
+      "unit_price": 97.0,
+      "amount": 194.0
+    },
+    {
+      "name": "ตำมะเขือ",
+      "qty": 1,
+      "unit_price": 67.0,
+      "amount": 67.0
+    },
+    {
+      "name": "ฮอเดิร์ฟเมือง",
+      "qty": 2,
+      "unit_price": 187.0,
+      "amount": 374.0
+    },
+    {
+      "name": "ข้าวสวย",
+      "qty": 1,
+      "unit_price": 15.0,
+      "amount": 15.0
+    },
+    {
+      "name": "น้ําดื่ม",
+      "qty": 3,
+      "unit_price": 10.0,
+      "amount": 30.0
+    },
+    {
+      "name": "น้ําแข็ง S",
+      "qty": 1,
+      "unit_price": 10.0,
+      "amount": 10.0
+    },
+    {
+      "name": "น้ําแข็ง M",
+      "qty": 1,
+      "unit_price": 15.0,
+      "amount": 15.0
+    }
+  ],
+  "discount": {
+    "present": true,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": false,
+    "amount": 0.0
+  },
+  "total": 1362.0,
+  "confidence": null,
+  "warnings": [
+    "скидка в чеке указана как 0,00"
+  ]
+}

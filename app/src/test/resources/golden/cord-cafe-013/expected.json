@@ -1,0 +1,32 @@
+{
+  "merchant": null,
+  "currency": "IDR",
+  "items": [
+    {
+      "name": "BASO KUAH",
+      "qty": 1.0,
+      "unit_price": 43636.0,
+      "amount": 43636.0
+    },
+    {
+      "name": "A.MINERAL GELAS",
+      "qty": 1.0,
+      "unit_price": 3000.0,
+      "amount": 3000.0
+    }
+  ],
+  "discount": {
+    "present": false,
+    "amount": 0.0
+  },
+  "service_charge": {
+    "present": true,
+    "percent": null,
+    "amount": 4664.0
+  },
+  "total": 51300.0,
+  "confidence": null,
+  "warnings": [
+    "налог 4664 записан в service_charge: в receipt.v1 поля tax нет"
+  ]
+}
