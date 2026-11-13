@@ -35,9 +35,11 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.chekcalc.api.RecognitionResult
 import ru.chekcalc.image.PhotoCompressor
 import ru.chekcalc.image.PhotoOrientation
 import ru.chekcalc.image.PhotoSizing
+import ru.chekcalc.model.Receipt
 import java.io.File
 
 /**
@@ -52,8 +54,8 @@ import java.io.File
  */
 @Composable
 fun PhotoImportScreen(
-    recognize: suspend (ByteArray) -> String?,
-    onRecognized: () -> Unit = {},
+    recognize: suspend (ByteArray) -> RecognitionResult,
+    onRecognized: (Receipt) -> Unit = {},
     onBack: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -65,6 +67,11 @@ fun PhotoImportScreen(
     var capturePath by rememberSaveable { mutableStateOf<String?>(null) }
     var sending by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var canRetry by rememberSaveable { mutableStateOf(false) }
+    // Пустой чек нельзя переслать тем же фото: нужен другой кадр.
+    // Оба поля переживают поворот экрана, иначе блокировка слетала бы.
+    var needsNewPhoto by rememberSaveable { mutableStateOf(false) }
+    var failedUri by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingPath by rememberSaveable { mutableStateOf<String?>(null) }
 
     val picked = pickedUri?.let { Uri.parse(it) }
@@ -91,19 +98,29 @@ fun PhotoImportScreen(
         sending = true
         message = null
         scope.launch {
-            val error = withContext(Dispatchers.IO) {
+            val result = withContext(Dispatchers.IO) {
                 try {
                     recognize(compressor.compress(uri))
                 } catch (failure: Exception) {
-                    failure.message ?: "не удалось подготовить фото"
+                    RecognitionResult.Failure(
+                        ru.chekcalc.api.FailureKind.INVALID_RESPONSE,
+                        failure.message ?: "не удалось подготовить фото",
+                    )
                 }
             }
             sending = false
-            if (error == null) {
-                deletePickedCapture()
-                onRecognized()
-            } else {
-                message = error
+            when (result) {
+                is RecognitionResult.Success -> {
+                    deletePickedCapture()
+                    canRetry = false
+                    onRecognized(result.receipt)
+                }
+                is RecognitionResult.Failure -> {
+                    message = result.message
+                    canRetry = result.retryable
+                    needsNewPhoto = !result.retryable
+                    failedUri = if (result.retryable) null else pickedUri
+                }
             }
         }
     }
@@ -117,6 +134,9 @@ fun PhotoImportScreen(
                 pickedUri = Uri.fromFile(File(it)).toString()
             }
             message = null
+            needsNewPhoto = false
+            canRetry = false
+            failedUri = null
         } else {
             // Отмена: удаляем только что созданный файл, выбранное фото не трогаем.
             pendingPath?.let { runCatching { File(it).delete() } }
@@ -132,6 +152,12 @@ fun PhotoImportScreen(
             deletePickedCapture()
             pickedUri = uri.toString()
             message = null
+            canRetry = false
+            // То же самое фото после неповторяемой ошибки не считается новым:
+            // запоминаем его, пока не выберут другое.
+            val chosen = uri.toString()
+            needsNewPhoto = chosen == failedUri
+            if (!needsNewPhoto) failedUri = null
         }
     }
 
@@ -200,7 +226,7 @@ fun PhotoImportScreen(
             }
 
             Button(
-                enabled = !sending,
+                enabled = !sending && !needsNewPhoto,
                 onClick = { submit() },
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             ) {
@@ -214,7 +240,9 @@ fun PhotoImportScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 16.dp),
             )
-            if (picked != null && !sending) {
+            // Пустой чек повторять бессмысленно: кнопку показываем только
+            // для ошибок, которые повтор действительно может исправить.
+            if (picked != null && !sending && canRetry) {
                 TextButton(onClick = { submit() }) { Text("Повторить") }
             }
         }
