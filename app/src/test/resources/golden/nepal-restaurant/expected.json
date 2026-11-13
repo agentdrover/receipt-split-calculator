@@ -15,7 +15,7 @@
   },
   "service_charge": {
     "present": true,
-    "percent": 10.0,
+    "percent": null,
     "amount": 144.59
   },
   "total": 739.59,

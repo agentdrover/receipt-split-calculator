@@ -13,8 +13,8 @@ import kotlinx.serialization.Serializable
 data class Receipt(
     val merchant: String? = null,
     val date: String? = null,
-    val currency: String = "RUB",
-    val items: List<ReceiptItem> = emptyList(),
+    val currency: String,
+    val items: List<ReceiptItem>,
     val discount: Discount = Discount(),
     @SerialName("service_charge") val serviceCharge: ServiceCharge = ServiceCharge(),
     val total: Double,

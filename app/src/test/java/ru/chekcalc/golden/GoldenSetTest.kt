@@ -82,6 +82,13 @@ class GoldenSetTest {
         assertTrue("позиции при этом разобраны", receipt.items.size >= 10)
     }
 
+    @Test(expected = kotlinx.serialization.SerializationException::class)
+    fun `чек без валюты и позиций не разбирается`() {
+        // receipt.v1 требует currency и items: пустой чек должен падать,
+        // а не превращаться в рублёвый чек без позиций.
+        json.decodeFromString<Receipt>("""{"total":100}""")
+    }
+
     @Test
     fun `скидка и обслуживание размечены там, где они есть`() {
         val withDiscount = load("cord-cafe-004")
