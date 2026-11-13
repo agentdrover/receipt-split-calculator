@@ -22,8 +22,8 @@ class ProviderProbe(
         .readTimeout(10, TimeUnit.SECONDS)
         .build(),
 ) {
-    fun check(baseUrl: String, apiKey: String): ProbeResult {
-        val url = baseUrl.trim().trimEnd('/') + "/models"
+    fun check(baseUrl: String, apiKey: String, probePath: String = "models"): ProbeResult {
+        val url = baseUrl.trim().trimEnd('/') + "/" + probePath.trimStart('/')
 
         return try {
             val request = Request.Builder()
