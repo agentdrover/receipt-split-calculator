@@ -106,6 +106,32 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `прерванная миграция повторяется при следующем запуске`() {
+        // Активный провайдер уже записан, а данные не перенесены — как если бы
+        // процесс убили посередине.
+        store.values["active_provider"] = ProviderPreset.CUSTOM.id
+        store.values["api_key"] = "sk-legacy-7777"
+        store.values["base_url"] = "https://legacy.example/v1"
+
+        val settings = repository.load()
+
+        assertEquals("sk-legacy-7777", settings.apiKey)
+        assertEquals("https://legacy.example/v1", settings.baseUrl)
+        assertFalse("старые ключи должны быть удалены", store.values.containsKey("api_key"))
+    }
+
+    @Test
+    fun `миграция не переключает выбранного провайдера`() {
+        store.values["active_provider"] = ProviderPreset.DEEPSEEK.id
+        store.values["api_key"] = "sk-legacy-8888"
+
+        repository.load()
+
+        assertEquals(ProviderPreset.DEEPSEEK, repository.activeProvider())
+        assertEquals("sk-legacy-8888", repository.switchTo(ProviderPreset.CUSTOM).apiKey)
+    }
+
+    @Test
     fun `пустой ключ маскируется в пустую строку`() {
         assertEquals("", repository.maskedKey())
     }

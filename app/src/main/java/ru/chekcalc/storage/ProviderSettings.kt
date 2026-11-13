@@ -78,20 +78,22 @@ class SettingsRepository(private val store: SecretStore) {
      * Переносим их в провайдера «Свой адрес», чтобы человек не потерял ключ.
      */
     private fun migrateLegacyOnce() {
-        if (store.get(KEY_ACTIVE_PROVIDER) != null) return
         val legacyKey = store.get(LEGACY_API_KEY)
         val legacyUrl = store.get(LEGACY_BASE_URL)
         val legacyModel = store.get(LEGACY_MODEL)
         if (legacyKey == null && legacyUrl == null && legacyModel == null) return
 
+        // Порядок важен: сначала переносим данные, и только потом помечаем
+        // миграцию сделанной. Если процесс убьют посередине, старые ключи
+        // останутся на месте и следующий запуск повторит перенос.
         val custom = ProviderPreset.CUSTOM.id
-        store.put(KEY_ACTIVE_PROVIDER, custom)
         if (legacyKey != null) store.put(keyApiKey(custom), legacyKey)
         if (legacyUrl != null) {
             store.put(keyBaseUrl(custom), legacyUrl)
             store.put(keyBoundUrl(custom), legacyUrl)
         }
         if (legacyModel != null) store.put(keyModel(custom), legacyModel)
+        if (store.get(KEY_ACTIVE_PROVIDER) == null) store.put(KEY_ACTIVE_PROVIDER, custom)
         store.remove(LEGACY_API_KEY)
         store.remove(LEGACY_BASE_URL)
         store.remove(LEGACY_MODEL)

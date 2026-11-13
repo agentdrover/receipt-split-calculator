@@ -168,10 +168,13 @@ fun SettingsScreen(
                     typedUrl != saved.baseUrl -> message = "Сначала сохраните настройки: адрес изменился"
                     saved.apiKey.isBlank() -> message = "Сначала задайте ключ"
                     else -> {
+                        // Снимок до запуска: переключение провайдера во время
+                        // проверки не должно отправить ключ одного на адрес другого.
+                        val target = saved
                         checking = true
                         scope.launch {
                             val result = withContext(Dispatchers.IO) {
-                                probe.check(saved.baseUrl, saved.apiKey)
+                                probe.check(target.baseUrl, target.apiKey)
                             }
                             checking = false
                             message = when (result) {
