@@ -20,6 +20,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.json.Json
+import ru.chekcalc.api.RecognitionClient
+import ru.chekcalc.model.Receipt
+import ru.chekcalc.api.RecognitionResult
 import ru.chekcalc.storage.EncryptedSecretStore
 import ru.chekcalc.storage.SettingsRepository
 import ru.chekcalc.ui.ChekCalcTheme
@@ -37,22 +41,42 @@ class MainActivity : ComponentActivity() {
                 val repository = remember {
                     SettingsRepository(EncryptedSecretStore(context.applicationContext))
                 }
+                val recognition = remember { RecognitionClient() }
                 // rememberSaveable: поворот экрана или пересоздание Activity
                 // не должны выбрасывать человека с текущего экрана.
                 var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
+                // Чек переживает поворот экрана: храним его JSON-ом.
+                val receiptJson = remember { Json { ignoreUnknownKeys = true } }
+                var lastReceiptJson by rememberSaveable { mutableStateOf<String?>(null) }
+                val lastReceipt = lastReceiptJson?.let {
+                    runCatching { receiptJson.decodeFromString<Receipt>(it) }.getOrNull()
+                }
                 val screen = Screen.valueOf(screenName)
 
                 when (screen) {
                     Screen.HOME -> HomeScreen(
+                        lastReceipt = lastReceipt,
                         onImport = { screenName = Screen.IMPORT.name },
                         onOpenSettings = { screenName = Screen.SETTINGS.name },
                     )
 
                     Screen.IMPORT -> PhotoImportScreen(
-                        // Клиент распознавания появится в #2306; до тех пор
-                        // экран честно говорит, что отправлять некуда.
-                        recognize = { "Распознавание ещё не подключено" },
-                        onRecognized = { screenName = Screen.HOME.name },
+                        recognize = { bytes ->
+                            val settings = repository.load()
+                            if (settings.apiKey.isBlank()) {
+                                RecognitionResult.Failure(
+                                    ru.chekcalc.api.FailureKind.PROVIDER,
+                                    "Сначала задайте ключ в настройках",
+                                    retryable = false,
+                                )
+                            } else {
+                                recognition.recognize(bytes, settings)
+                            }
+                        },
+                        onRecognized = { receipt ->
+                            lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
+                            screenName = Screen.HOME.name
+                        },
                         onBack = { screenName = Screen.HOME.name },
                     )
 
@@ -67,7 +91,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun HomeScreen(onImport: () -> Unit, onOpenSettings: () -> Unit) {
+private fun HomeScreen(
+    lastReceipt: Receipt?,
+    onImport: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
         Column(modifier = Modifier.padding(inner).padding(22.dp)) {
             Text("Расчёт по чеку", style = MaterialTheme.typography.headlineMedium)
@@ -76,6 +104,13 @@ private fun HomeScreen(onImport: () -> Unit, onOpenSettings: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp, bottom = 20.dp),
             )
+            lastReceipt?.let { receipt ->
+                Text(
+                    "Распознан чек: ${receipt.items.size} поз., итог ${receipt.total} ${receipt.currency}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+            }
             Button(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
                 Text("Загрузить чек")
             }
