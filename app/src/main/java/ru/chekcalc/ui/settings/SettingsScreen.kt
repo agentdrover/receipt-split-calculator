@@ -171,15 +171,20 @@ fun SettingsScreen(
                         // Снимок до запуска: переключение провайдера во время
                         // проверки не должно отправить ключ одного на адрес другого.
                         val target = saved
+                        val targetProvider = provider
                         checking = true
                         scope.launch {
                             val result = withContext(Dispatchers.IO) {
-                                probe.check(target.baseUrl, target.apiKey)
+                                probe.check(target.baseUrl, target.apiKey, targetProvider.probePath)
                             }
                             checking = false
-                            message = when (result) {
-                                is ProbeResult.Ok -> "Провайдер отвечает, ключ принят"
-                                is ProbeResult.Failed -> result.reason
+                            // Пока шла проверка, провайдера могли переключить:
+                            // чужой ответ на экране не показываем.
+                            if (provider == targetProvider) {
+                                message = when (result) {
+                                    is ProbeResult.Ok -> "Провайдер отвечает, ключ принят"
+                                    is ProbeResult.Failed -> result.reason
+                                }
                             }
                         }
                     }

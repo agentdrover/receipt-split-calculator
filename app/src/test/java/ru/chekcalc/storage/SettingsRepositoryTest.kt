@@ -124,11 +124,94 @@ class SettingsRepositoryTest {
     fun `миграция не переключает выбранного провайдера`() {
         store.values["active_provider"] = ProviderPreset.DEEPSEEK.id
         store.values["api_key"] = "sk-legacy-8888"
+        store.values["base_url"] = "https://legacy.example/v1"
 
         repository.load()
 
         assertEquals(ProviderPreset.DEEPSEEK, repository.activeProvider())
         assertEquals("sk-legacy-8888", repository.switchTo(ProviderPreset.CUSTOM).apiKey)
+    }
+
+    @Test
+    fun `миграция не затирает уже сохранённый ключ своего адреса`() {
+        // Пользователь уже настроил «свой адрес», а в хранилище остались
+        // старые общие ключи: перенос не должен затереть рабочую настройку.
+        store.values["active_provider"] = ProviderPreset.CUSTOM.id
+        store.values["api_key_custom"] = "sk-new-5555"
+        store.values["base_url_custom"] = "https://new.example/v1"
+        store.values["key_bound_url_custom"] = "https://new.example/v1"
+        store.values["api_key"] = "sk-legacy-6666"
+        store.values["base_url"] = "https://old.example/v1"
+
+        val settings = repository.load()
+
+        assertEquals("sk-new-5555", settings.apiKey)
+        assertEquals("https://new.example/v1", settings.baseUrl)
+    }
+
+    @Test
+    fun `OpenRouter проверяет ключ на своём эндпоинте`() {
+        assertEquals("key", ProviderPreset.OPENROUTER.probePath)
+        assertEquals("models", ProviderPreset.DEEPSEEK.probePath)
+    }
+
+    @Test
+    fun `миграция доставляет привязку ключа при обрыве`() {
+        // Адрес уже перенесён, привязки ещё нет — как после падения между записями.
+        store.values["api_key_custom"] = "sk-legacy-7777"
+        store.values["base_url_custom"] = "https://legacy.example/v1"
+        store.values["api_key"] = "sk-legacy-7777"
+        store.values["base_url"] = "https://legacy.example/v1"
+
+        repository.load()
+
+        assertEquals("https://legacy.example/v1", store.values["key_bound_url_custom"])
+    }
+
+    @Test
+    fun `ключ без привязки к адресу требует повторного ввода`() {
+        store.values["api_key_custom"] = "sk-orphan-9999"
+        store.values["base_url_custom"] = "https://a.example/v1"
+
+        val result = repository.save(
+            ProviderSettings(ProviderPreset.CUSTOM.id, "sk-orphan-9999", "https://a.example/v1", "m"),
+        )
+
+        assertTrue((result as SaveResult.Saved).keyReentryRequired)
+        assertTrue(repository.load().apiKey.isEmpty())
+    }
+
+    @Test
+    fun `старый ключ не переносится на другой адрес`() {
+        store.values["base_url_custom"] = "https://new.example/v1"
+        store.values["api_key"] = "sk-legacy-6666"
+        store.values["base_url"] = "https://old.example/v1"
+
+        val settings = repository.load()
+
+        assertTrue("ключ старого адреса не должен достаться новому", settings.apiKey.isEmpty())
+        assertEquals("https://new.example/v1", settings.baseUrl)
+    }
+
+    @Test
+    fun `ключ без привязки не отдаётся и не отправляется`() {
+        store.values["active_provider"] = ProviderPreset.CUSTOM.id
+        store.values["api_key_custom"] = "sk-orphan-9999"
+        store.values["base_url_custom"] = "https://a.example/v1"
+
+        assertTrue(repository.load().apiKey.isEmpty())
+    }
+
+    @Test
+    fun `миграция не привязывает чужой ключ к старому адресу`() {
+        store.values["api_key_custom"] = "sk-other-1234"
+        store.values["api_key"] = "sk-legacy-6666"
+        store.values["base_url"] = "https://old.example/v1"
+
+        repository.load()
+
+        assertEquals("привязки быть не должно", null, store.values["key_bound_url_custom"])
+        assertTrue("непривязанный ключ не отдаётся", repository.load().apiKey.isEmpty())
     }
 
     @Test

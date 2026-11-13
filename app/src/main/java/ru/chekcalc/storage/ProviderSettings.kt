@@ -31,10 +31,19 @@ class SettingsRepository(private val store: SecretStore) {
 
     fun load(): ProviderSettings {
         val preset = activeProvider()
+        val baseUrl = store.get(keyBaseUrl(preset.id)).orEmpty().ifEmpty { preset.defaultBaseUrl }
+        val storedKey = store.get(keyApiKey(preset.id)).orEmpty()
+        // Ключ отдаём только если он привязан именно к этому адресу:
+        // иначе он мог бы уйти на чужой хост.
+        val key = if (storedKey.isNotEmpty() && store.get(keyBoundUrl(preset.id)) == baseUrl) {
+            storedKey
+        } else {
+            ""
+        }
         return ProviderSettings(
             providerId = preset.id,
-            apiKey = store.get(keyApiKey(preset.id)).orEmpty(),
-            baseUrl = store.get(keyBaseUrl(preset.id)).orEmpty().ifEmpty { preset.defaultBaseUrl },
+            apiKey = key,
+            baseUrl = baseUrl,
             model = store.get(keyModel(preset.id)).orEmpty().ifEmpty { preset.defaultModel },
         )
     }
@@ -53,7 +62,8 @@ class SettingsRepository(private val store: SecretStore) {
         }
 
         val previousUrl = store.get(keyBoundUrl(preset.id))
-        val urlChanged = previousUrl != null && previousUrl != url
+        val keyWithoutBinding = previousUrl == null && store.get(keyApiKey(preset.id)) != null
+        val urlChanged = keyWithoutBinding || (previousUrl != null && previousUrl != url)
         val key = if (urlChanged) "" else input.apiKey.trim()
         val model = input.model.trim().ifEmpty { preset.defaultModel }
 
@@ -87,12 +97,30 @@ class SettingsRepository(private val store: SecretStore) {
         // миграцию сделанной. Если процесс убьют посередине, старые ключи
         // останутся на месте и следующий запуск повторит перенос.
         val custom = ProviderPreset.CUSTOM.id
-        if (legacyKey != null) store.put(keyApiKey(custom), legacyKey)
-        if (legacyUrl != null) {
+        val currentUrl = store.get(keyBaseUrl(custom))
+        // Ключ из старых настроек принадлежит старому адресу. Переносим его,
+        // только если «свой адрес» ещё не задан или совпадает со старым.
+        val sameTarget = currentUrl == null ||
+            (legacyUrl != null && currentUrl == legacyUrl.trim().trimEnd('/'))
+
+        if (legacyUrl != null && currentUrl == null) {
             store.put(keyBaseUrl(custom), legacyUrl)
-            store.put(keyBoundUrl(custom), legacyUrl)
         }
-        if (legacyModel != null) store.put(keyModel(custom), legacyModel)
+        // Привязку ставим только тому ключу, который действительно пришёл из
+        // старых настроек. Чужой непривязанный ключ привязывать нельзя.
+        val existingKey = store.get(keyApiKey(custom))
+        val keyIsLegacy = existingKey == null || existingKey == legacyKey
+        if (legacyUrl != null && sameTarget && keyIsLegacy && store.get(keyBoundUrl(custom)) == null) {
+            store.put(keyBoundUrl(custom), legacyUrl.trim().trimEnd('/'))
+        }
+        // Ключ без адреса переносить некуда: без привязки он не должен
+        // использоваться вообще.
+        if (legacyKey != null && legacyUrl != null && sameTarget && store.get(keyApiKey(custom)) == null) {
+            store.put(keyApiKey(custom), legacyKey)
+        }
+        if (legacyModel != null && store.get(keyModel(custom)) == null) {
+            store.put(keyModel(custom), legacyModel)
+        }
         if (store.get(KEY_ACTIVE_PROVIDER) == null) store.put(KEY_ACTIVE_PROVIDER, custom)
         store.remove(LEGACY_API_KEY)
         store.remove(LEGACY_BASE_URL)

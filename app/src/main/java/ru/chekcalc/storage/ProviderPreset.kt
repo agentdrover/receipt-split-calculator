@@ -12,6 +12,8 @@ enum class ProviderPreset(
     val defaultBaseUrl: String,
     val defaultModel: String,
     val modelHint: String? = null,
+    /** Эндпоинт, который действительно проверяет ключ, а не просто отвечает 200. */
+    val probePath: String = "models",
 ) {
     DEEPSEEK(
         id = "deepseek",
@@ -26,6 +28,8 @@ enum class ProviderPreset(
         defaultBaseUrl = "https://openrouter.ai/api/v1",
         defaultModel = "google/gemini-2.5-flash",
         modelHint = "модель в формате vendor/model",
+        // /models у OpenRouter публичный и отвечает 200 даже с мусорным ключом.
+        probePath = "key",
     ),
     CUSTOM(
         id = "custom",
