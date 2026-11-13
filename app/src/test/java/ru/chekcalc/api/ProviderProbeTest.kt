@@ -56,6 +56,15 @@ class ProviderProbeTest {
     }
 
     @Test
+    fun `проверка идёт по указанному пути`() {
+        server.enqueue(MockResponse().setResponseCode(200))
+
+        probe.check(server.url("/v1").toString().trimEnd('/'), "sk-test", "key")
+
+        assertEquals("/v1/key", server.takeRequest().path)
+    }
+
+    @Test
     fun `пустой адрес не роняет приложение`() {
         val result = probe.check("", "sk-test")
 
