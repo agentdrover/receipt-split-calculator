@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -59,6 +60,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.chekcalc.calc.Money
@@ -89,6 +92,15 @@ fun ReviewScreen(
         mutableStateOf(TotalsEditState.of(draft))
     }
     var photoShown by rememberSaveable { mutableStateOf(true) }
+    var viewerOpen by rememberSaveable { mutableStateOf(false) }
+    // Декодируем один раз: карточка и полноэкранный просмотр делят битмап.
+    val photoBitmap by produceState<ImageBitmap?>(initialValue = null, photo) {
+        value = photo?.let { bytes ->
+            withContext(Dispatchers.IO) {
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            }
+        }
+    }
     // Масштаб фото переживает поворот и сворачивание карточки.
     val photoView = rememberSaveable(stateSaver = PhotoViewStateSaver) {
         mutableStateOf(PhotoViewState())
@@ -105,11 +117,12 @@ fun ReviewScreen(
             if (photo != null) {
                 item(key = "photo") {
                     ReviewPhotoCard(
-                        photo = photo,
+                        bitmap = photoBitmap,
                         expanded = photoShown,
                         view = photoView.value,
                         onViewChange = { photoView.value = it },
                         onToggle = { photoShown = !photoShown },
+                        onOpenViewer = { viewerOpen = true },
                     )
                 }
             }
@@ -144,6 +157,10 @@ fun ReviewScreen(
         }
 
         PrimaryNextButton(onClick = onNext)
+    }
+
+    if (viewerOpen && photo != null) {
+        PhotoViewer(bitmap = photoBitmap, onClose = { viewerOpen = false })
     }
 
     if (itemSheetOpen) {
@@ -348,11 +365,12 @@ private fun PrimaryNextButton(onClick: () -> Unit) {
  */
 @Composable
 private fun ReviewPhotoCard(
-    photo: ByteArray,
+    bitmap: ImageBitmap?,
     expanded: Boolean,
     view: PhotoViewState,
     onViewChange: (PhotoViewState) -> Unit,
     onToggle: () -> Unit,
+    onOpenViewer: () -> Unit,
 ) {
     if (!expanded) {
         Row(
@@ -384,43 +402,13 @@ private fun ReviewPhotoCard(
         return
     }
 
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, photo) {
-        value = withContext(Dispatchers.IO) {
-            BitmapFactory.decodeByteArray(photo, 0, photo.size)?.asImageBitmap()
-        }
-    }
-    val currentView by rememberUpdatedState(view)
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(200.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    // Нажатие на «Свернуть» или «Сбросить масштаб» уже поглощено
-                    // дочерним элементом — жест фото не должен его перебивать.
-                    awaitFirstDown(requireUnconsumed = true)
-                    var zooming = false
-                    do {
-                        val event = awaitPointerEvent()
-                        if (event.changes.any { it.isConsumed }) break
-                        val zoom = event.calculateZoom()
-                        val pan = event.calculatePan()
-                        if (event.changes.count { it.pressed } > 1 || zoom != 1f) {
-                            zooming = true
-                        }
-                        if (zooming || currentView.scale > PhotoViewState.MIN_SCALE) {
-                            val next = currentView.zoom(zoom).let { state ->
-                                if (state.scale > PhotoViewState.MIN_SCALE) state.pan(pan) else state
-                            }
-                            onViewChange(next)
-                            event.changes.forEach { it.consume() }
-                        }
-                    } while (event.changes.any { it.pressed })
-                }
-            },
+            .then(rememberPhotoGestures(view = view, onViewChange = onViewChange, onTap = onOpenViewer)),
         contentAlignment = Alignment.Center,
     ) {
         val image = bitmap
@@ -456,7 +444,7 @@ private fun ReviewPhotoCard(
                 .padding(horizontal = 12.dp, vertical = 7.dp),
         )
         Text(
-            text = "щипок · перетаскивание",
+            text = "нажмите · щипок",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 10.dp),
@@ -620,6 +608,100 @@ private fun TotalsEditSheet(
             ) {
                 Text("Сохранить")
             }
+        }
+    }
+}
+
+/**
+ * Жест по фото: щипок и панорама, а короткое нажатие — открыть просмотр.
+ * События, поглощённые дочерними кнопками, не перехватываем.
+ */
+@Composable
+private fun rememberPhotoGestures(
+    view: PhotoViewState,
+    onViewChange: (PhotoViewState) -> Unit,
+    onTap: (() -> Unit)?,
+): Modifier {
+    val current by rememberUpdatedState(view)
+    val tap by rememberUpdatedState(onTap)
+    return Modifier.pointerInput(Unit) {
+        val slop = viewConfiguration.touchSlop
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = true)
+            var moved = false
+            var zooming = false
+            var consumedByChild = false
+            var travelled = Offset.Zero
+            do {
+                val event = awaitPointerEvent()
+                if (event.changes.any { it.isConsumed }) {
+                    consumedByChild = true
+                    break
+                }
+                val zoom = event.calculateZoom()
+                val pan = event.calculatePan()
+                if (event.changes.count { it.pressed } > 1 || zoom != 1f) zooming = true
+                // Суммарный путь, а не шаг события: плавная панорама идёт
+                // мелкими шагами, каждый из которых меньше touchSlop.
+                travelled += pan
+                if (travelled.getDistance() > slop) moved = true
+                if (zooming || current.scale > PhotoViewState.MIN_SCALE) {
+                    val next = current.zoom(zoom).let { state ->
+                        if (state.scale > PhotoViewState.MIN_SCALE) state.pan(pan) else state
+                    }
+                    onViewChange(next)
+                    event.changes.forEach { it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+            if (!consumedByChild && !moved && !zooming) tap?.invoke()
+        }
+    }
+}
+
+/** Полноэкранный просмотр фото: чёрный фон, зум, крестик и системный Back. */
+@Composable
+private fun PhotoViewer(bitmap: ImageBitmap?, onClose: () -> Unit) {
+    // Увеличение в просмотре тоже переживает поворот.
+    var view by rememberSaveable(stateSaver = PhotoViewStateSaver) {
+        mutableStateOf(PhotoViewState())
+    }
+
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .then(rememberPhotoGestures(view = view, onViewChange = { view = it }, onTap = null)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val image = bitmap
+            if (image == null) {
+                Text(text = "Готовим фото…", color = Color.White)
+            } else {
+                Image(
+                    bitmap = image,
+                    contentDescription = "Фото чека",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().graphicsLayer(
+                        scaleX = view.scale,
+                        scaleY = view.scale,
+                        translationX = view.offset.x,
+                        translationY = view.offset.y,
+                    ),
+                )
+            }
+            Text(
+                text = "×",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0x66000000))
+                    .clickable(onClick = onClose)
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
+            )
         }
     }
 }
