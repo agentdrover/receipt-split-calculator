@@ -36,6 +36,9 @@ class RecognitionClientTest {
     @After
     fun tearDown() {
         runCatching { server.shutdown() }
+        // enqueue поднимает non-daemon потоки диспетчера: без остановки
+        // тестовая JVM не завершится и gradle зависнет.
+        client.close()
     }
 
     private fun answer(content: String, code: Int = 200) {
@@ -53,7 +56,7 @@ class RecognitionClientTest {
          "total":390.25,"warnings":[]}
     """.trimIndent()
 
-    @Test
+    @Test(timeout = 15_000)
     fun `успешный ответ разбирается в модель`() = runBlocking {
         answer(goodReceipt)
 
@@ -67,7 +70,7 @@ class RecognitionClientTest {
         assertEquals(390.25, receipt.total, 0.001)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `запрос несёт ключ, модель и картинку в base64`() = runBlocking {
         answer(goodReceipt)
 
@@ -81,7 +84,7 @@ class RecognitionClientTest {
         assertTrue("нет картинки", body.contains("data:image/jpeg;base64,"))
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `мусор дважды даёт ошибку разбора и ровно два запроса`() = runBlocking {
         answer("это не json")
         answer("и это тоже")
@@ -93,7 +96,7 @@ class RecognitionClientTest {
         assertEquals(2, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `ответ по схеме без валюты отклоняется`() = runBlocking {
         answer("""{"items":[{"name":"Кофе","amount":100.0}],"total":100.0}""")
         answer("""{"items":[{"name":"Кофе","amount":100.0}],"total":100.0}""")
@@ -104,7 +107,7 @@ class RecognitionClientTest {
         assertEquals(2, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `пустой чек не повторяется`() = runBlocking {
         answer("""{"currency":"RUB","items":[],"total":0.0,"warnings":["не читается"]}""")
 
@@ -116,7 +119,7 @@ class RecognitionClientTest {
         assertEquals(1, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `отказ провайдера не повторяется`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"bad key"}"""))
 
@@ -126,7 +129,7 @@ class RecognitionClientTest {
         assertEquals(1, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `молчащий провайдер даёт таймаут`() = runBlocking {
         val impatient = RecognitionClient(
             http = OkHttpClient.Builder()
@@ -137,11 +140,12 @@ class RecognitionClientTest {
         server.enqueue(MockResponse().setBody("{}").setBodyDelay(5, TimeUnit.SECONDS))
 
         val result = impatient.recognize(image, settings)
+        impatient.close()
 
         assertEquals(FailureKind.TIMEOUT, (result as RecognitionResult.Failure).kind)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `невалидный ответ не утекает в расчёт`() = runBlocking {
         answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":-5.0}],"total":-5.0}""")
         answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":-5.0}],"total":-5.0}""")
@@ -151,7 +155,7 @@ class RecognitionClientTest {
         assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `отрицательная цена позиции отклоняется`() = runBlocking {
         answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"unit_price":-1.0,"amount":10.0}],"total":10.0}""")
         answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"unit_price":-1.0,"amount":10.0}],"total":10.0}""")
@@ -161,7 +165,7 @@ class RecognitionClientTest {
         assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `итог вне диапазона отклоняется`() = runBlocking {
         answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":1e18}],"total":1e18}""")
         answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":1e18}],"total":1e18}""")
@@ -171,7 +175,7 @@ class RecognitionClientTest {
         assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `провайдер с Retry-After не получает скрытых повторов`() = runBlocking {
         // Два ответа, чтобы увидеть, повторяет ли OkHttp сам при Retry-After.
         repeat(2) {
@@ -188,7 +192,7 @@ class RecognitionClientTest {
         assertEquals("OkHttp повторяет 503 с Retry-After один раз", 2, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `скидка вне диапазона отклоняется`() = runBlocking {
         answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":10.0}],"discount":{"present":true,"amount":1e18},"total":10.0}""")
         answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":10.0}],"discount":{"present":true,"amount":1e18},"total":10.0}""")
@@ -198,21 +202,21 @@ class RecognitionClientTest {
         assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `слишком большой ответ не разбирается`() {
         val huge = ByteArrayInputStream("x".repeat(1_100_000).toByteArray())
 
         assertEquals(null, ResponseReader.read(huge))
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `ответ в пределах потолка читается целиком`() {
         val text = """{"ok":true}"""
 
         assertEquals(text, ResponseReader.read(ByteArrayInputStream(text.toByteArray())))
     }
 
-    @Test
+    @Test(timeout = 15_000)
     fun `рубли переводятся в целые копейки`() {
         assertEquals(39025L, ru.chekcalc.calc.rublesToKopecks(390.25))
         assertEquals(0L, ru.chekcalc.calc.rublesToKopecks(0.0))

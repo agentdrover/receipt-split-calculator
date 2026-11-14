@@ -155,9 +155,9 @@ fun PhotoImportScreen(
             canRetry = false
             // То же самое фото после неповторяемой ошибки не считается новым:
             // запоминаем его, пока не выберут другое.
-            val chosen = uri.toString()
-            needsNewPhoto = chosen == failedUri
-            if (!needsNewPhoto) failedUri = null
+            // Проваленное фото остаётся проваленным, пока не будет нового кадра:
+            // выбор A → B → A не должен разблокировать отправку A.
+            needsNewPhoto = uri.toString() == failedUri
         }
     }
 
