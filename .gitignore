@@ -5,3 +5,6 @@ local.properties
 
 # локальные чеки для golden set
 .receipts/
+
+# Kotlin daemon: логи компиляции
+.kotlin/
