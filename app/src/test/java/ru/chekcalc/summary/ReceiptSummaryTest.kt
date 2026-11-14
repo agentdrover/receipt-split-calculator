@@ -96,6 +96,16 @@ class ReceiptSummaryTest {
     }
 
     @Test
+    fun `реквизиты переживают сохранение состояния`() {
+        val payer = Payer(name = "Аня", phone = "+7 999 123-45-67")
+
+        val restored = ru.chekcalc.PayerSaver.restore(listOf(payer.name, payer.phone))
+            ?: error("Saver не восстановил реквизиты")
+
+        assertEquals(payer, restored)
+    }
+
+    @Test
     fun `считает свои и общие позиции`() {
         val summary = ReceiptSummary.from(
             state(
