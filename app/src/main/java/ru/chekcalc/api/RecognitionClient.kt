@@ -1,7 +1,6 @@
 package ru.chekcalc.api
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -11,7 +10,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import ru.chekcalc.model.Receipt
 import ru.chekcalc.storage.ProviderSettings
 import java.io.IOException
@@ -56,6 +58,15 @@ class RecognitionClient(
     private val attempts: Int = 2,
 ) {
 
+    /**
+     * Останавливает диспетчер OkHttp. В приложении клиент живёт всё время,
+     * а тестам нужно освободить фоновые потоки, иначе JVM не завершится.
+     */
+    fun close() {
+        http.dispatcher.executorService.shutdown()
+        http.connectionPool.evictAll()
+    }
+
     suspend fun recognize(image: ByteArray, settings: ProviderSettings): RecognitionResult {
         require(isSecure(settings.baseUrl)) { "нужен https-адрес" }
         require(settings.apiKey.isNotBlank()) { "не задан ключ" }
@@ -76,44 +87,72 @@ class RecognitionClient(
         return lastFailure ?: RecognitionResult.Failure(FailureKind.INVALID_RESPONSE, "не удалось распознать")
     }
 
-    private suspend fun call(image: ByteArray, settings: ProviderSettings): RecognitionResult =
-        withContext(Dispatchers.IO) {
-            val body = buildBody(image, settings.model)
-            val request = Request.Builder()
-                .url(settings.baseUrl.trimEnd('/') + "/chat/completions")
-                .header("Authorization", "Bearer ${settings.apiKey}")
-                .header("Content-Type", "application/json")
-                .post(body.toRequestBody(JSON_MEDIA))
-                .build()
+    /**
+     * Один обмен с провайдером.
+     *
+     * Отмена корутины (например, поворот экрана) отменяет Call на всё время
+     * запроса, включая чтение тела: `invokeOnCancellation` живёт до тех пор,
+     * пока продолжение не завершено.
+     */
+    private suspend fun call(image: ByteArray, settings: ProviderSettings): RecognitionResult {
+        val request = Request.Builder()
+            .url(settings.baseUrl.trimEnd('/') + "/chat/completions")
+            .header("Authorization", "Bearer ${settings.apiKey}")
+            .header("Content-Type", "application/json")
+            .post(buildBody(image, settings.model).toRequestBody(JSON_MEDIA))
+            .build()
 
-            try {
-                http.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return@withContext RecognitionResult.Failure(
-                            FailureKind.PROVIDER,
-                            "Провайдер ответил ${response.code}",
-                        )
+        return suspendCancellableCoroutine { continuation ->
+            val call = http.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, error: IOException) {
+                    if (!continuation.isActive) return
+                    val failure = if (error is java.io.InterruptedIOException) {
+                        RecognitionResult.Failure(FailureKind.TIMEOUT, "Провайдер не ответил вовремя")
+                    } else {
+                        RecognitionResult.Failure(FailureKind.NETWORK, "Нет связи с провайдером")
                     }
-                    val size = response.body?.contentLength() ?: -1
-                    if (size > MAX_RESPONSE_BYTES) {
-                        return@withContext RecognitionResult.Failure(
-                            FailureKind.INVALID_RESPONSE,
-                            "Ответ провайдера больше допустимого",
-                        )
-                    }
-                    val payload = response.body?.byteStream()?.let { ResponseReader.read(it) }
-                        ?: return@withContext RecognitionResult.Failure(
-                            FailureKind.INVALID_RESPONSE,
-                            "Пустой или слишком большой ответ провайдера",
-                        )
-                    parse(payload)
+                    continuation.resumeWith(Result.success(failure))
                 }
-            } catch (timeout: java.io.InterruptedIOException) {
-                RecognitionResult.Failure(FailureKind.TIMEOUT, "Провайдер не ответил вовремя")
-            } catch (network: IOException) {
-                RecognitionResult.Failure(FailureKind.NETWORK, "Нет связи с провайдером")
-            }
+
+                override fun onResponse(call: Call, response: Response) {
+                    // Ошибку чтения тела нельзя выпускать из колбэка: тогда
+                    // продолжение не завершится и вызов повиснет навсегда.
+                    val result = try {
+                        response.use { readResult(it) }
+                    } catch (timeout: java.io.InterruptedIOException) {
+                        RecognitionResult.Failure(FailureKind.TIMEOUT, "Провайдер не ответил вовремя")
+                    } catch (error: IOException) {
+                        RecognitionResult.Failure(FailureKind.NETWORK, "Нет связи с провайдером")
+                    }
+                    if (continuation.isActive) continuation.resumeWith(Result.success(result))
+                }
+            })
         }
+    }
+
+    private fun readResult(response: Response): RecognitionResult {
+        if (!response.isSuccessful) {
+            return RecognitionResult.Failure(
+                FailureKind.PROVIDER,
+                "Провайдер ответил ${response.code}",
+            )
+        }
+        val size = response.body?.contentLength() ?: -1
+        if (size > MAX_RESPONSE_BYTES) {
+            return RecognitionResult.Failure(
+                FailureKind.INVALID_RESPONSE,
+                "Ответ провайдера больше допустимого",
+            )
+        }
+        val payload = response.body?.byteStream()?.let { ResponseReader.read(it) }
+            ?: return RecognitionResult.Failure(
+                FailureKind.INVALID_RESPONSE,
+                "Пустой или слишком большой ответ провайдера",
+            )
+        return parse(payload)
+    }
 
     private fun parse(payload: String): RecognitionResult {
         val content = try {
