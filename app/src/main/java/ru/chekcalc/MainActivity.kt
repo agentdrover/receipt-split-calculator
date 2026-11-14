@@ -36,6 +36,8 @@ import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.ReviewScreen
 import ru.chekcalc.ui.select.SelectionScreen
 import ru.chekcalc.ui.select.SelectionState
+import ru.chekcalc.storage.Payer
+import ru.chekcalc.storage.PayerStore
 import ru.chekcalc.ui.summary.ReceiptSummary
 import ru.chekcalc.ui.summary.SummaryScreen
 import ru.chekcalc.ui.settings.SettingsScreen
@@ -70,6 +72,9 @@ class MainActivity : ComponentActivity() {
                 var selectionSourceJson by rememberSaveable { mutableStateOf<String?>(null) }
                 // Итог фиксируется на момент перехода: экран итога не пересчитывает.
                 var summaryJson by rememberSaveable { mutableStateOf<String?>(null) }
+                // Реквизиты платившего: вводятся один раз, живут только на устройстве.
+                val payerStore = remember { PayerStore(this@MainActivity) }
+                var payer by rememberSaveable { mutableStateOf(payerStore.load()) }
                 val summary = summaryJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptSummary>(it) }.getOrNull()
                 }
@@ -205,6 +210,11 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 SummaryScreen(
                                     summary = current,
+                                    payer = payer,
+                                    onPayerChange = { updated ->
+                                        payer = updated
+                                        payerStore.save(updated)
+                                    },
                                     onDone = {
                                         screenName = Screen.HOME.name
                                         lastReceiptJson = null

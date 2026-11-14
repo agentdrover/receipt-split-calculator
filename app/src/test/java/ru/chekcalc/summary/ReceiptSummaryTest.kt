@@ -6,6 +6,7 @@ import org.junit.Test
 import ru.chekcalc.ui.select.Choice
 import ru.chekcalc.ui.select.SelectableItem
 import ru.chekcalc.ui.select.SelectionState
+import ru.chekcalc.storage.Payer
 import ru.chekcalc.ui.summary.ReceiptSummary
 
 class ReceiptSummaryTest {
@@ -63,6 +64,35 @@ class ReceiptSummaryTest {
 
         assertTrue(text.contains("Расчёт по чеку"))
         assertTrue(text.contains("Итого к переводу: 780 ₽"))
+    }
+
+    @Test
+    fun `текст шаринга называет кому переводить`() {
+        val summary = ReceiptSummary.from(state(SelectableItem(1, "Обед", 78_000, Choice.Whole)))
+
+        val text = summary.shareText(Payer(name = "Аня", phone = "+7 999 123-45-67"))
+
+        assertTrue(text.contains("Перевод на +7 999 123-45-67 (Аня)"))
+    }
+
+    @Test
+    fun `без реквизитов строка перевода не появляется`() {
+        val summary = ReceiptSummary.from(state(SelectableItem(1, "Обед", 78_000, Choice.Whole)))
+
+        val text = summary.shareText(Payer())
+
+        assertTrue(text.isNotBlank())
+        assertTrue("Перевод на" !in text)
+    }
+
+    @Test
+    fun `телефон без имени пишется один`() {
+        val summary = ReceiptSummary.from(state(SelectableItem(1, "Обед", 78_000, Choice.Whole)))
+
+        val text = summary.shareText(Payer(phone = "+7 900 000-00-00"))
+
+        assertTrue(text.contains("Перевод на +7 900 000-00-00"))
+        assertTrue("()" !in text)
     }
 
     @Test

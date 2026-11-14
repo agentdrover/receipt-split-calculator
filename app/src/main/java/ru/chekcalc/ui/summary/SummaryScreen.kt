@@ -17,7 +17,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,8 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import ru.chekcalc.calc.Money
+import ru.chekcalc.storage.Payer
 
 /**
  * Экран итога: разбивка суммы и отправка её тому, кому переводить.
@@ -38,12 +42,14 @@ import ru.chekcalc.calc.Money
 @Composable
 fun SummaryScreen(
     summary: ReceiptSummary,
+    payer: Payer = Payer(),
+    onPayerChange: (Payer) -> Unit = {},
     onDone: () -> Unit = {},
     onBack: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
-    val text = summary.shareText()
+    val text = summary.shareText(payer)
     val rows = summary.lines()
 
     // Системный «Назад» возвращает к выбору, а не закрывает приложение.
@@ -64,7 +70,25 @@ fun SummaryScreen(
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
         )
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        // Реквизиты вводятся один раз и запоминаются: без них вторая строка
+        // текста не говорит, кому переводить.
+        OutlinedTextField(
+            value = payer.phone,
+            onValueChange = { onPayerChange(payer.copy(phone = it)) },
+            label = { Text("Телефон для перевода") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        )
+        OutlinedTextField(
+            value = payer.name,
+            onValueChange = { onPayerChange(payer.copy(name = it)) },
+            label = { Text("Имя (не обязательно)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+
+        Card(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),

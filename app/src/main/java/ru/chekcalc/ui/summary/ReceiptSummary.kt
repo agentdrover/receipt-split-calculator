@@ -3,6 +3,7 @@ package ru.chekcalc.ui.summary
 import kotlinx.serialization.Serializable
 import ru.chekcalc.calc.Money
 import ru.chekcalc.ui.select.Choice
+import ru.chekcalc.storage.Payer
 import ru.chekcalc.ui.select.SelectionState
 
 /**
@@ -31,8 +32,11 @@ data class ReceiptSummary(
         add("Итого" to Money.format(totalKopecks))
     }
 
-    /** Текст для копирования и шаринга: короткий, без лишних символов валюты. */
-    fun shareText(): String {
+    /**
+     * Текст для копирования и шаринга по §FR-6: сумма, слагаемые и реквизиты,
+     * чтобы получатель понял, кому и сколько переводить, без приложения.
+     */
+    fun shareText(payer: Payer = Payer()): String {
         // Строки считаем снаружи buildString: внутри него lines() разрешается
         // в расширение String и тип теряется.
         val rows = lines()
@@ -42,6 +46,8 @@ data class ReceiptSummary(
                 appendLine("$label: $value")
             }
             append("Итого к переводу: ${Money.format(totalKopecks)}")
+            val who = payer.display()
+            if (who.isNotBlank()) append("\nПеревод на $who")
         }
     }
 
