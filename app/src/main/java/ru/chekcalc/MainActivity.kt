@@ -11,6 +11,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -78,112 +79,117 @@ class MainActivity : ComponentActivity() {
                 }
                 val screen = Screen.valueOf(screenName)
 
-                when (screen) {
-                    Screen.HOME -> HomeScreen(
-                        lastReceipt = lastReceipt,
-                        onImport = { screenName = Screen.IMPORT.name },
-                        onManual = {
-                            manualJson = null
-                            screenName = Screen.MANUAL.name
-                        },
-                        onOpenSettings = { screenName = Screen.SETTINGS.name },
-                    )
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
+                    when (screen) {
+                        Screen.HOME -> HomeScreen(
+                            lastReceipt = lastReceipt,
+                            onImport = { screenName = Screen.IMPORT.name },
+                            onManual = {
+                                manualJson = null
+                                screenName = Screen.MANUAL.name
+                            },
+                            onOpenSettings = { screenName = Screen.SETTINGS.name },
+                        )
 
-                    Screen.IMPORT -> PhotoImportScreen(
-                        recognize = { bytes ->
-                            val settings = repository.load()
-                            if (settings.apiKey.isBlank()) {
-                                RecognitionResult.Failure(
-                                    ru.chekcalc.api.FailureKind.PROVIDER,
-                                    "Сначала задайте ключ в настройках",
-                                    retryable = false,
-                                )
+                        Screen.IMPORT -> PhotoImportScreen(
+                            recognize = { bytes ->
+                                val settings = repository.load()
+                                if (settings.apiKey.isBlank()) {
+                                    RecognitionResult.Failure(
+                                        ru.chekcalc.api.FailureKind.PROVIDER,
+                                        "Сначала задайте ключ в настройках",
+                                        retryable = false,
+                                    )
+                                } else {
+                                    recognition.recognize(bytes, settings)
+                                }
+                            },
+                            onRecognized = { receipt ->
+                                lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
+                                val draftValue = ReceiptDraft.fromReceipt(receipt)
+                                draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), draftValue)
+                                screenName = Screen.REVIEW.name
+                            },
+                            onManualEntry = {
+                                manualJson = null
+                                screenName = Screen.MANUAL.name
+                            },
+                            onBack = { screenName = Screen.HOME.name },
+                        )
+
+                        Screen.MANUAL -> ManualEntryScreen(
+                            draft = manualDraft,
+                            onChange = { updated ->
+                                manualJson = receiptJson.encodeToString(ReceiptDraft.serializer(), updated)
+                            },
+                            onNext = { entered ->
+                                // Ручной чек идёт тем же путём, что распознанный:
+                                // сначала receipt.v1, потом черновик проверки.
+                                val receipt = ManualReceipt.toReceipt(entered)
+                                lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
+                                val reviewDraft = ReceiptDraft.fromReceipt(receipt)
+                                draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), reviewDraft)
+                                manualJson = null
+                                screenName = Screen.REVIEW.name
+                            },
+                            onBack = { screenName = Screen.HOME.name },
+                        )
+
+                        Screen.REVIEW -> {
+                            val current = draft
+                            if (current == null) {
+                                screenName = Screen.HOME.name
                             } else {
-                                recognition.recognize(bytes, settings)
+                                ReviewScreen(
+                                    draft = current,
+                                    onChange = { updated ->
+                                        draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), updated)
+                                    },
+                                    onNext = {
+                                        val source = draftJson
+                                        if (selection == null || selectionSourceJson != source) {
+                                            val fromDraft = SelectionState.fromDraft(current)
+                                            selectionJson = receiptJson.encodeToString(
+                                                SelectionState.serializer(),
+                                                fromDraft,
+                                            )
+                                            selectionSourceJson = source
+                                        }
+                                        screenName = Screen.SELECT.name
+                                    },
+                                    onBack = { screenName = Screen.HOME.name },
+                                )
                             }
-                        },
-                        onRecognized = { receipt ->
-                            lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
-                            val draftValue = ReceiptDraft.fromReceipt(receipt)
-                            draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), draftValue)
-                            screenName = Screen.REVIEW.name
-                        },
-                        onManualEntry = {
-                            manualJson = null
-                            screenName = Screen.MANUAL.name
-                        },
-                        onBack = { screenName = Screen.HOME.name },
-                    )
+                        }
 
-                    Screen.MANUAL -> ManualEntryScreen(
-                        draft = manualDraft,
-                        onChange = { updated ->
-                            manualJson = receiptJson.encodeToString(ReceiptDraft.serializer(), updated)
-                        },
-                        onNext = { entered ->
-                            // Ручной чек идёт тем же путём, что распознанный:
-                            // сначала receipt.v1, потом черновик проверки.
-                            val receipt = ManualReceipt.toReceipt(entered)
-                            lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
-                            val reviewDraft = ReceiptDraft.fromReceipt(receipt)
-                            draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), reviewDraft)
-                            manualJson = null
-                            screenName = Screen.REVIEW.name
-                        },
-                        onBack = { screenName = Screen.HOME.name },
-                    )
-
-                    Screen.REVIEW -> {
-                        val current = draft
-                        if (current == null) {
-                            screenName = Screen.HOME.name
-                        } else {
-                            ReviewScreen(
-                                draft = current,
-                                onChange = { updated ->
-                                    draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), updated)
-                                },
-                                onNext = {
-                                    val source = draftJson
-                                    if (selection == null || selectionSourceJson != source) {
-                                        val fromDraft = SelectionState.fromDraft(current)
+                        Screen.SELECT -> {
+                            val current = selection
+                            if (current == null) {
+                                screenName = Screen.HOME.name
+                            } else {
+                                SelectionScreen(
+                                    state = current,
+                                    onChange = { updated ->
                                         selectionJson = receiptJson.encodeToString(
                                             SelectionState.serializer(),
-                                            fromDraft,
+                                            updated,
                                         )
-                                        selectionSourceJson = source
-                                    }
-                                    screenName = Screen.SELECT.name
-                                },
-                                onBack = { screenName = Screen.HOME.name },
-                            )
+                                    },
+                                    // Экран итога появится в #2298.
+                                    onNext = { screenName = Screen.HOME.name },
+                                    onBack = { screenName = Screen.REVIEW.name },
+                                )
+                            }
                         }
-                    }
 
-                    Screen.SELECT -> {
-                        val current = selection
-                        if (current == null) {
-                            screenName = Screen.HOME.name
-                        } else {
-                            SelectionScreen(
-                                state = current,
-                                onChange = { updated ->
-                                    selectionJson = receiptJson.encodeToString(
-                                        SelectionState.serializer(),
-                                        updated,
-                                    )
-                                },
-                                // Экран итога появится в #2298.
-                                onNext = { screenName = Screen.HOME.name },
-                                onBack = { screenName = Screen.REVIEW.name },
-                            )
-                        }
+                        Screen.SETTINGS -> SettingsScreen(
+                            repository = repository,
+                            onBack = { screenName = Screen.HOME.name },
+                        )
                     }
-
-                    Screen.SETTINGS -> SettingsScreen(
-                        repository = repository,
-                        onBack = { screenName = Screen.HOME.name },
-                    )
                 }
             }
         }
