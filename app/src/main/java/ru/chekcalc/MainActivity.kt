@@ -213,11 +213,14 @@ class MainActivity : ComponentActivity() {
                                             updated,
                                         )
                                     },
-                                    // Экран итога появится в #2298.
                                     onNext = {
-                                        // Сессия проверки закончена — фото больше не нужно.
-                                        reviewPhoto.clear()
-                                        screenName = Screen.HOME.name
+                                        // Итог собираем здесь один раз: экран итога
+                                        // ничего не пересчитывает и показывает те же цифры.
+                                        summaryJson = receiptJson.encodeToString(
+                                            ReceiptSummary.serializer(),
+                                            ReceiptSummary.from(current),
+                                        )
+                                        screenName = Screen.SUMMARY.name
                                     },
                                     onBack = { screenName = Screen.REVIEW.name },
                                 )
@@ -237,6 +240,8 @@ class MainActivity : ComponentActivity() {
                                         payerStore.save(updated)
                                     },
                                     onDone = {
+                                        // Сессия проверки закончена — фото больше не нужно.
+                                        reviewPhoto.clear()
                                         screenName = Screen.HOME.name
                                         lastReceiptJson = null
                                         draftJson = null
