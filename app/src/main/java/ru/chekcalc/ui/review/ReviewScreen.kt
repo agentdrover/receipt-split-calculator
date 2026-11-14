@@ -2,39 +2,46 @@ package ru.chekcalc.ui.review
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -42,26 +49,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.chekcalc.calc.Money
 import ru.chekcalc.calc.rublesToKopecks
 
 /**
- * Экран «Проверьте чек»: позиции с правкой и сверка с итогом.
+ * Экран «Проверьте чек» по макету docs/mockups/review-check-apple.png.
  *
- * Текст числовых полей хранится на уровне экрана: у LazyColumn позиции
- * пересоздаются при прокрутке, и состояние внутри строки терялось бы вместе
- * с подсветкой ошибки. Расхождение перехода не блокирует, а невалидный
- * ввод — блокирует: иначе «Дальше» унесло бы прежнее значение.
+ * Позиции читаются как список: нажатие открывает лист правки, а не правит
+ * поле в строке. Так длинное название переносится и не обрезается, а экран
+ * не превращается в набор полей ввода.
  */
 @Composable
 fun ReviewScreen(
@@ -71,163 +82,679 @@ fun ReviewScreen(
     onBack: () -> Unit = {},
     photo: ByteArray? = null,
 ) {
-    // Тексты полей по id позиции; отсутствие записи — значение из черновика.
-    val priceTexts = remember { mutableStateMapOf<Long, String>() }
-    val qtyTexts = remember { mutableStateMapOf<Long, String>() }
-    val totalText = remember { mutableStateMapOf<String, String>() }
-
-    fun text(key: String, value: String): String = totalText[key] ?: value
-
-    val invalidTotal = listOf("total", "discount", "service").any { key ->
-        val fallback = when (key) {
-            "total" -> rublesText(draft.totalKopecks)
-            "discount" -> rublesText(draft.discountKopecks)
-            else -> rublesText(draft.serviceKopecks)
+    // Лист правки переживает поворот: несохранённый ввод не теряется.
+    var itemSheetOpen by rememberSaveable { mutableStateOf(false) }
+    var editingItem by rememberSaveable(stateSaver = ItemEditStateSaver) {
+        mutableStateOf(ItemEditState.new())
+    }
+    var totalsSheetOpen by rememberSaveable { mutableStateOf(false) }
+    var editingTotals by rememberSaveable(stateSaver = TotalsEditStateSaver) {
+        mutableStateOf(TotalsEditState.of(draft))
+    }
+    var photoShown by rememberSaveable { mutableStateOf(true) }
+    var viewerOpen by rememberSaveable { mutableStateOf(false) }
+    // Декодируем один раз: карточка и полноэкранный просмотр делят битмап.
+    val photoBitmap by produceState<ImageBitmap?>(initialValue = null, photo) {
+        value = photo?.let { bytes ->
+            withContext(Dispatchers.IO) {
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            }
         }
-        parseRubles(text(key, fallback)) == null
     }
-    val invalidItems = draft.items.any { item ->
-        val price = priceTexts[item.id] ?: rublesText(item.unitPriceKopecks)
-        val qty = qtyTexts[item.id] ?: item.qty?.let { formatQty(it) } ?: ""
-        parseRubles(price) == null || (qty.isNotBlank() && parseQty(qty) == null)
+    // Масштаб фото переживает поворот и сворачивание карточки.
+    val photoView = rememberSaveable(stateSaver = PhotoViewStateSaver) {
+        mutableStateOf(PhotoViewState())
     }
-    val hasInvalidInput = invalidTotal || invalidItems
 
-    LazyColumn(
+    Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item(key = "header") { ReviewHeader(draft = draft, onBack = onBack) }
+
+            if (photo != null) {
+                item(key = "photo") {
+                    ReviewPhotoCard(
+                        bitmap = photoBitmap,
+                        expanded = photoShown,
+                        view = photoView.value,
+                        onViewChange = { photoView.value = it },
+                        onToggle = { photoShown = !photoShown },
+                        onOpenViewer = { viewerOpen = true },
+                    )
+                }
+            }
+
+            item(key = "totals") {
+                TotalsCard(
+                    draft = draft,
+                    onEdit = {
+                        editingTotals = TotalsEditState.of(draft)
+                        totalsSheetOpen = true
+                    },
+                )
+            }
+
+            draft.residualWarning()?.let { warning ->
+                item(key = "warning") { ResidualWarning(text = warning) }
+            }
+
+            item(key = "items") {
+                ItemsCard(
+                    draft = draft,
+                    onEdit = { item ->
+                        editingItem = ItemEditState.of(item)
+                        itemSheetOpen = true
+                    },
+                    onAdd = {
+                        editingItem = ItemEditState.new()
+                        itemSheetOpen = true
+                    },
+                )
+            }
+        }
+
+        PrimaryNextButton(onClick = onNext)
+    }
+
+    if (viewerOpen && photo != null) {
+        PhotoViewer(bitmap = photoBitmap, onClose = { viewerOpen = false })
+    }
+
+    if (itemSheetOpen) {
+        ItemEditSheet(
+            state = editingItem,
+            onChange = { editingItem = it },
+            onDismiss = { itemSheetOpen = false },
+            onSave = { updated ->
+                onChange(updated.apply(draft))
+                itemSheetOpen = false
+            },
+            onDelete = editingItem.itemId?.let { id ->
+                {
+                    onChange(draft.removeItem(id))
+                    itemSheetOpen = false
+                }
+            },
+        )
+    }
+
+    if (totalsSheetOpen) {
+        TotalsEditSheet(
+            state = editingTotals,
+            onChange = { editingTotals = it },
+            onDismiss = { totalsSheetOpen = false },
+            onSave = { updated ->
+                onChange(updated.apply(draft))
+                totalsSheetOpen = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun ReviewHeader(draft: ReceiptDraft, onBack: () -> Unit) {
+    Column {
+        TextButton(
+            onClick = onBack,
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+        ) {
+            Text("‹ Назад", color = MaterialTheme.colorScheme.primary)
+        }
+        Text(
+            text = "Проверьте чек",
+            style = MaterialTheme.typography.headlineLarge.copy(fontFamily = FontFamily.Serif),
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            text = "${draft.items.size} ${positionsWord(draft.items.size)} · итог ${Money.format(draft.totalKopecks)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun TotalsCard(draft: ReceiptDraft, onEdit: () -> Unit) {
+    Column(
         modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onEdit),
     ) {
-        item(key = "header") {
-            Column {
-                TextButton(onClick = onBack) { Text("Назад") }
-                Text("Проверьте чек", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    text = "Позиций: ${draft.items.size}, сумма ${Money.format(draft.itemsSumKopecks)}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    MoneyField(
-                        label = "Итог",
-                        text = text("total", rublesText(draft.totalKopecks)),
-                        invalid = parseRubles(text("total", rublesText(draft.totalKopecks))) == null,
-                        onTextChange = { raw ->
-                            totalText["total"] = raw
-                            parseRubles(raw)?.let { onChange(draft.changeTotal(it)) }
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    MoneyField(
-                        label = "Скидка",
-                        text = text("discount", rublesText(draft.discountKopecks)),
-                        invalid = parseRubles(text("discount", rublesText(draft.discountKopecks))) == null,
-                        onTextChange = { raw ->
-                            totalText["discount"] = raw
-                            parseRubles(raw)?.let { onChange(draft.changeDiscount(it)) }
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    MoneyField(
-                        label = "Обслуж.",
-                        text = text("service", rublesText(draft.serviceKopecks)),
-                        invalid = parseRubles(text("service", rublesText(draft.serviceKopecks))) == null,
-                        onTextChange = { raw ->
-                            totalText["service"] = raw
-                            parseRubles(raw)?.let { onChange(draft.changeService(it)) }
-                        },
-                        modifier = Modifier.weight(1f),
+        TotalRow("Итог", formatKopecks(draft.totalKopecks), bold = true)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        TotalRow("Скидка", formatKopecks(draft.discountKopecks))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        TotalRow("Обслуживание", formatKopecks(draft.serviceKopecks))
+    }
+}
+
+@Composable
+private fun TotalRow(label: String, value: String, bold: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = (if (bold) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium)
+                .copy(fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal),
+        )
+    }
+}
+
+@Composable
+private fun ItemsCard(
+    draft: ReceiptDraft,
+    onEdit: (DraftItem) -> Unit,
+    onAdd: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface),
+    ) {
+        draft.items.forEachIndexed { index, item ->
+            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            ItemRow(item = item, onClick = { onEdit(item) })
+        }
+        if (draft.items.isNotEmpty()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onAdd)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("＋", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text(
+                text = "Добавить позицию",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ItemRow(item: DraftItem, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.name.ifBlank { "Без названия" },
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${item.qty?.let { formatQty(it) } ?: "1"} × ${formatKopecks(item.unitPriceKopecks)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Text(
+            text = formatKopecks(item.amountKopecks),
+            style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
+            modifier = Modifier.padding(start = 12.dp),
+        )
+    }
+}
+
+@Composable
+private fun ResidualWarning(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+    )
+}
+
+@Composable
+private fun PrimaryNextButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        shape = RoundedCornerShape(26.dp),
+        contentPadding = PaddingValues(horizontal = 22.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(top = 8.dp, bottom = 10.dp)
+            .height(56.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Дальше", style = MaterialTheme.typography.titleMedium)
+            Text("→", style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+/**
+ * Фото чека сверху: раскрытая карточка с зумом или компактная строка.
+ * Пока фото не увеличено и нет щипка, жест не перехватывается — список
+ * прокручивается как обычно.
+ */
+@Composable
+private fun ReviewPhotoCard(
+    bitmap: ImageBitmap?,
+    expanded: Boolean,
+    view: PhotoViewState,
+    onViewChange: (PhotoViewState) -> Unit,
+    onToggle: () -> Unit,
+    onOpenViewer: () -> Unit,
+) {
+    if (!expanded) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp, 44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                bitmap?.let { thumb ->
+                    Image(
+                        bitmap = thumb,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
+            Text(
+                text = "Фото чека",
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.weight(1f).padding(start = 12.dp),
+            )
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+        return
+    }
 
-        draft.residualWarning()?.let { warning ->
-            item(key = "warning") {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = warning,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
-            }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(rememberPhotoGestures(view = view, onViewChange = onViewChange, onTap = onOpenViewer)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val image = bitmap
+        if (image == null) {
+            Text(
+                text = "Готовим фото…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Image(
+                bitmap = image,
+                contentDescription = "Фото чека",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().graphicsLayer(
+                    scaleX = view.scale,
+                    scaleY = view.scale,
+                    translationX = view.offset.x,
+                    translationY = view.offset.y,
+                ),
+            )
         }
+        Text(
+            text = "Свернуть",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+        )
+        Text(
+            text = "нажмите · щипок",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 10.dp),
+        )
+        if (view.scale > PhotoViewState.MIN_SCALE) {
+            Text(
+                text = "Сбросить масштаб",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 10.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+                    .clickable { onViewChange(view.reset()) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
 
-        items(draft.items, key = { it.id }) { item ->
-            val price = priceTexts[item.id] ?: rublesText(item.unitPriceKopecks)
-            val qty = qtyTexts[item.id] ?: item.qty?.let { formatQty(it) } ?: ""
-
-            Column(modifier = Modifier.fillMaxWidth()) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ItemEditSheet(
+    state: ItemEditState,
+    onChange: (ItemEditState) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: (ItemEditState) -> Unit,
+    onDelete: (() -> Unit)?,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                // Альбомная ориентация с клавиатурой не должна обрезать кнопки.
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = if (state.itemId == null) "Новая позиция" else "Позиция",
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
+            )
+            OutlinedTextField(
+                value = state.name,
+                onValueChange = { onChange(state.copy(name = it)) },
+                label = { Text("Название") },
+                maxLines = 3,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 OutlinedTextField(
-                    value = item.name,
-                    onValueChange = { onChange(draft.rename(item.id, it)) },
-                    label = { Text("Позиция") },
+                    value = state.qtyText,
+                    onValueChange = { onChange(state.copy(qtyText = it)) },
+                    label = { Text("Кол-во") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    isError = state.qtyText.isNotBlank() && state.qty == null,
+                    supportingText = if (state.qtyText.isNotBlank() && state.qty == null) {
+                        { Text("Введите число") }
+                    } else {
+                        null
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    QuantityField(
-                        text = qty,
-                        invalid = qty.isNotBlank() && parseQty(qty) == null,
-                        onTextChange = { raw ->
-                            qtyTexts[item.id] = raw
-                            val parsed = parseQty(raw)
-                            if (raw.isBlank() || parsed != null) onChange(draft.changeQty(item.id, parsed))
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    MoneyField(
-                        label = "Цена",
-                        text = price,
-                        invalid = parseRubles(price) == null,
-                        onTextChange = { raw ->
-                            priceTexts[item.id] = raw
-                            parseRubles(raw)?.let { onChange(draft.changeUnitPrice(item.id, it)) }
-                        },
-                        modifier = Modifier.weight(1.2f),
-                    )
-                    Text(
-                        text = Money.format(item.amountKopecks),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
-                    )
-                    TextButton(onClick = {
-                        priceTexts.remove(item.id)
-                        qtyTexts.remove(item.id)
-                        onChange(draft.removeItem(item.id))
-                    }) { Text("×") }
-                }
+                OutlinedTextField(
+                    value = state.priceText,
+                    onValueChange = { onChange(state.copy(priceText = it)) },
+                    label = { Text("Цена") },
+                    singleLine = true,
+                    isError = parseRubles(state.priceText) == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1.2f),
+                )
             }
-        }
-
-        // Фото под списком: сверять распознанное с картинкой.
-        photo?.let { bytes ->
-            item(key = "photo") { ReviewPhotoBlock(photo = bytes) }
-        }
-
-        item(key = "actions") {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = { onChange(draft.addItem()) }) { Text("Добавить позицию") }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Button(
-                    enabled = !hasInvalidInput,
-                    onClick = onNext,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    onClick = { onSave(state) },
+                    enabled = state.valid,
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.weight(1f).height(52.dp),
                 ) {
-                    Text("Дальше")
+                    Text("Сохранить")
+                }
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete, modifier = Modifier.height(52.dp)) {
+                        Text("Удалить", color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TotalsEditSheet(
+    state: TotalsEditState,
+    onChange: (TotalsEditState) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: (TotalsEditState) -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = "Итог чека",
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
+            )
+            OutlinedTextField(
+                value = state.totalText,
+                onValueChange = { onChange(state.copy(totalText = it)) },
+                label = { Text("Итог") },
+                singleLine = true,
+                isError = parseRubles(state.totalText) == null,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedTextField(
+                    value = state.discountText,
+                    onValueChange = { onChange(state.copy(discountText = it)) },
+                    label = { Text("Скидка") },
+                    singleLine = true,
+                    isError = parseRubles(state.discountText) == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = state.serviceText,
+                    onValueChange = { onChange(state.copy(serviceText = it)) },
+                    label = { Text("Обслуживание") },
+                    singleLine = true,
+                    isError = parseRubles(state.serviceText) == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Button(
+                onClick = { onSave(state) },
+                enabled = state.valid,
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(52.dp),
+            ) {
+                Text("Сохранить")
+            }
+        }
+    }
+}
+
+/**
+ * Жест по фото: щипок и панорама, а короткое нажатие — открыть просмотр.
+ * События, поглощённые дочерними кнопками, не перехватываем.
+ */
+@Composable
+private fun rememberPhotoGestures(
+    view: PhotoViewState,
+    onViewChange: (PhotoViewState) -> Unit,
+    onTap: (() -> Unit)?,
+): Modifier {
+    val current by rememberUpdatedState(view)
+    val tap by rememberUpdatedState(onTap)
+    return Modifier.pointerInput(Unit) {
+        val slop = viewConfiguration.touchSlop
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = true)
+            var moved = false
+            var zooming = false
+            var consumedByChild = false
+            var travelled = Offset.Zero
+            do {
+                val event = awaitPointerEvent()
+                if (event.changes.any { it.isConsumed }) {
+                    consumedByChild = true
+                    break
+                }
+                val zoom = event.calculateZoom()
+                val pan = event.calculatePan()
+                if (event.changes.count { it.pressed } > 1 || zoom != 1f) zooming = true
+                // Суммарный путь, а не шаг события: плавная панорама идёт
+                // мелкими шагами, каждый из которых меньше touchSlop.
+                travelled += pan
+                if (travelled.getDistance() > slop) moved = true
+                if (zooming || current.scale > PhotoViewState.MIN_SCALE) {
+                    val next = current.zoom(zoom).let { state ->
+                        if (state.scale > PhotoViewState.MIN_SCALE) state.pan(pan) else state
+                    }
+                    onViewChange(next)
+                    event.changes.forEach { it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+            if (!consumedByChild && !moved && !zooming) tap?.invoke()
+        }
+    }
+}
+
+/** Полноэкранный просмотр фото: чёрный фон, зум, крестик и системный Back. */
+@Composable
+private fun PhotoViewer(bitmap: ImageBitmap?, onClose: () -> Unit) {
+    // Увеличение в просмотре тоже переживает поворот.
+    var view by rememberSaveable(stateSaver = PhotoViewStateSaver) {
+        mutableStateOf(PhotoViewState())
+    }
+
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .then(rememberPhotoGestures(view = view, onViewChange = { view = it }, onTap = null)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val image = bitmap
+            if (image == null) {
+                Text(text = "Готовим фото…", color = Color.White)
+            } else {
+                Image(
+                    bitmap = image,
+                    contentDescription = "Фото чека",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().graphicsLayer(
+                        scaleX = view.scale,
+                        scaleY = view.scale,
+                        translationX = view.offset.x,
+                        translationY = view.offset.y,
+                    ),
+                )
+            }
+            Text(
+                text = "×",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0x66000000))
+                    .clickable(onClick = onClose)
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+/** Сохранение открытого листа позиции: идентификатор и три поля. */
+private val ItemEditStateSaver = listSaver<ItemEditState, String>(
+    save = { listOf(it.itemId?.toString() ?: "", it.name, it.qtyText, it.priceText) },
+    restore = { values ->
+        ItemEditState(
+            itemId = values[0].takeIf { it.isNotBlank() }?.toLongOrNull(),
+            name = values[1],
+            qtyText = values[2],
+            priceText = values[3],
+        )
+    },
+)
+
+/** Сохранение открытого листа «Итог чека». */
+private val TotalsEditStateSaver = listSaver<TotalsEditState, String>(
+    save = { listOf(it.totalText, it.discountText, it.serviceText) },
+    restore = { values -> TotalsEditState(values[0], values[1], values[2]) },
+)
+
+/** Сохранение масштаба и сдвига фото: список float-ов переживает поворот. */
+private val PhotoViewStateSaver = listSaver<PhotoViewState, Float>(
+    save = { listOf(it.scale, it.offset.x, it.offset.y) },
+    restore = { values -> PhotoViewState(values[0], Offset(values[1], values[2])) },
+)
+
+/** Правильная форма слова для подзаголовка: 1 позиция, 2 позиции, 5 позиций. */
+private fun positionsWord(count: Int): String {
+    val mod100 = count % 100
+    val mod10 = count % 10
+    return when {
+        mod100 in 11..14 -> "позиций"
+        mod10 == 1 -> "позиция"
+        mod10 in 2..4 -> "позиции"
+        else -> "позиций"
     }
 }
 
@@ -279,7 +806,7 @@ internal fun QuantityField(
  * слишком большое или нечисловое значение не роняет приложение.
  */
 internal fun parseRubles(text: String): Long? {
-    val normalized = text.trim().replace(',', '.')
+    val normalized = text.trim().filterNot { it.isWhitespace() }.replace(',', '.')
     if (normalized.isEmpty()) return null
     val value = normalized.toDoubleOrNull() ?: return null
     if (!value.isFinite() || value < 0 || value > MAX_RUBLES) return null
@@ -288,11 +815,22 @@ internal fun parseRubles(text: String): Long? {
 
 /** Разбор количества: пусто — null, мусор и перебор — тоже null. */
 internal fun parseQty(text: String): Double? {
-    val normalized = text.trim().replace(',', '.')
+    val normalized = text.trim().filterNot { it.isWhitespace() }.replace(',', '.')
     if (normalized.isEmpty()) return null
     val value = normalized.toDoubleOrNull() ?: return null
     if (!value.isFinite() || value < 0 || value > ReceiptDraft.MAX_QTY) return null
     return value
+}
+
+/** Сумма для экрана проверки: копейки и разряды, как в макете: 1 240,00 ₽. */
+internal fun formatKopecks(kopecks: Long): String {
+    if (kopecks == Long.MIN_VALUE) return "—"
+    val sign = if (kopecks < 0) "−" else ""
+    val value = kotlin.math.abs(kopecks)
+    val rubles = value / 100
+    val rest = value % 100
+    val grouped = rubles.toString().reversed().chunked(3).joinToString(" ").reversed()
+    return "$sign$grouped,${rest.toString().padStart(2, '0')} ₽"
 }
 
 /** Копейки в рубли для поля ввода: 39025 → «390.25». */
@@ -304,93 +842,3 @@ internal fun formatQty(qty: Double): String =
     if (qty == qty.toLong().toDouble()) qty.toLong().toString() else qty.toString()
 
 private const val MAX_RUBLES = 1_000_000_000.0
-
-/**
- * Блок фото под списком позиций: сверять распознанное с картинкой.
- *
- * Фото приходит сжатым JPEG в памяти; декодируем на IO, чтобы не подвешивать
- * экран. Переключатель скрывает блок целиком, щипок увеличивает фото.
- */
-@Composable
-private fun ReviewPhotoBlock(photo: ByteArray) {
-    var shown by rememberSaveable { mutableStateOf(true) }
-    // Масштаб переживает поворот, как и видимость блока.
-    val view = rememberSaveable(stateSaver = PhotoViewStateSaver) {
-        mutableStateOf(PhotoViewState())
-    }
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, photo) {
-        value = withContext(Dispatchers.IO) {
-            BitmapFactory.decodeByteArray(photo, 0, photo.size)?.asImageBitmap()
-        }
-    }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        TextButton(onClick = { shown = !shown }) {
-            Text(if (shown) "Скрыть фото" else "Показать фото")
-        }
-        if (!shown) return@Column
-        val image = bitmap
-        if (image == null) {
-            Text(
-                text = "Готовим фото…",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-            return@Column
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(240.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                // Жест не перехватываем, пока фото не увеличено: иначе один
-                // палец по картинке не прокручивает список. Щипок и панорама
-                // увеличенного фото поглощают движение сознательно.
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
-                        var zooming = false
-                        do {
-                            val event = awaitPointerEvent()
-                            val zoom = event.calculateZoom()
-                            val pan = event.calculatePan()
-                            if (event.changes.count { it.pressed } > 1 || zoom != 1f) {
-                                zooming = true
-                            }
-                            if (zooming || view.value.scale > PhotoViewState.MIN_SCALE) {
-                                view.value = view.value.zoom(zoom).let { state ->
-                                    if (state.scale > PhotoViewState.MIN_SCALE) state.pan(pan) else state
-                                }
-                                event.changes.forEach { it.consume() }
-                            }
-                        } while (event.changes.any { it.pressed })
-                    }
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                bitmap = image,
-                contentDescription = "Фото чека",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = view.value.scale,
-                        scaleY = view.value.scale,
-                        translationX = view.value.offset.x,
-                        translationY = view.value.offset.y,
-                    ),
-            )
-        }
-        if (view.value.scale > PhotoViewState.MIN_SCALE) {
-            TextButton(onClick = { view.value = view.value.reset() }) { Text("Сбросить масштаб") }
-        }
-    }
-}
-
-/** Сохранение масштаба и сдвига фото: список float-ов переживает поворот. */
-private val PhotoViewStateSaver = listSaver<PhotoViewState, Float>(
-    save = { listOf(it.scale, it.offset.x, it.offset.y) },
-    restore = { values -> PhotoViewState(values[0], Offset(values[1], values[2])) },
-)
