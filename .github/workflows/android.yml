@@ -50,6 +50,9 @@ jobs:
         env:
           HUB_TOKEN: ${{ secrets.HUB_CI_TOKEN }}
           CHECK_RESULT: ${{ needs.check.result }}
+          # На pull_request github.sha — это merge-коммит, а хаб закрепляет
+          # голову ветки; берём её отдельно.
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -uo pipefail
 
@@ -67,11 +70,11 @@ jobs:
           fi
 
           BODY=$(printf '{"head_sha":"%s","run_id":"%s","run_attempt":"%s","workflow_path":".github/workflows/android.yml","event":"%s","head_repository":"%s","run_conclusion":"%s","validation_status":"%s","reported_by":"github-actions"}' \
-            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" "$GITHUB_REPOSITORY" "$CHECK_RESULT" "$CHECK_RESULT")
+            "$HEAD_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" "$GITHUB_REPOSITORY" "$CHECK_RESULT" "$CHECK_RESULT")
 
           echo "Отправляю отчёт по задаче #$TASK, результат проверки: $CHECK_RESULT"
           # Падение отправки не должно красить сам прогон тестов.
-          curl -sS --max-time 30 -X POST \
+          curl -sS --fail --max-time 30 -X POST \
             "https://agenthai.ru/api/tasks/${TASK}/ci-run-report" \
             -H "Authorization: Bearer ${HUB_TOKEN}" \
             -H "Content-Type: application/json" \
