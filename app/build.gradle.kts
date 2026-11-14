@@ -34,6 +34,8 @@ android {
         // Ошибка линтера валит make analyze, предупреждения — нет.
         warningsAsErrors = false
         abortOnError = true
+        // Security-детекторы по умолчанию не спрашиваются (#2322).
+        enable += listOf("Security")
     }
 }
 

@@ -1,0 +1,23 @@
+# Обновления зависимостей (#2322).
+#
+# Одна группа на экосистему: без группировки Dependabot присылает отдельный
+# PR на каждый пакет, и они перестают сливаться.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: "/app"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      android:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]
