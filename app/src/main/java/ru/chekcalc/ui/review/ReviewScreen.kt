@@ -209,7 +209,7 @@ private fun ReviewHeader(draft: ReceiptDraft, onBack: () -> Unit) {
             color = MaterialTheme.colorScheme.onBackground,
         )
         Text(
-            text = "${draft.items.size} ${positionsWord(draft.items.size)} · итог ${Money.format(draft.totalKopecks)}",
+            text = "${draft.items.size} ${positionsWord(draft.items.size)} · итог ${formatRublesGrouped(draft.totalKopecks)}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -820,6 +820,21 @@ internal fun parseQty(text: String): Double? {
     val value = normalized.toDoubleOrNull() ?: return null
     if (!value.isFinite() || value < 0 || value > ReceiptDraft.MAX_QTY) return null
     return value
+}
+
+/** Рубли с разрядами и без лишних копеек: 124000 → «1 240 ₽», 124050 → «1 240,50 ₽». */
+internal fun formatRublesGrouped(kopecks: Long): String {
+    if (kopecks == Long.MIN_VALUE) return "—"
+    val sign = if (kopecks < 0) "−" else ""
+    val value = kotlin.math.abs(kopecks)
+    val rubles = value / 100
+    val rest = value % 100
+    val grouped = rubles.toString().reversed().chunked(3).joinToString(" ").reversed()
+    return if (rest == 0L) {
+        "$sign$grouped ₽"
+    } else {
+        "$sign$grouped,${rest.toString().padStart(2, '0')} ₽"
+    }
 }
 
 /** Сумма для экрана проверки: копейки и разряды, как в макете: 1 240,00 ₽. */

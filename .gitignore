@@ -8,3 +8,4 @@ local.properties
 
 # Kotlin daemon: логи компиляции
 .kotlin/
+.review-delta.txt

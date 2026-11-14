@@ -24,12 +24,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.serialization.json.Json
+import java.util.UUID
 import ru.chekcalc.api.RecognitionClient
 import ru.chekcalc.model.Receipt
 import ru.chekcalc.api.RecognitionResult
 import ru.chekcalc.storage.EncryptedSecretStore
+import ru.chekcalc.storage.HistoryEntry
 import ru.chekcalc.storage.SettingsRepository
 import ru.chekcalc.ui.ChekCalcTheme
+import ru.chekcalc.ui.history.HistoryDetailScreen
+import ru.chekcalc.ui.history.HistoryScreen
+import ru.chekcalc.ui.history.HistoryViewModel
 import ru.chekcalc.ui.import.PhotoImportScreen
 import ru.chekcalc.ui.manual.ManualEntryScreen
 import ru.chekcalc.ui.manual.ManualReceipt
@@ -40,7 +45,7 @@ import ru.chekcalc.ui.select.SelectionScreen
 import ru.chekcalc.ui.select.SelectionState
 import ru.chekcalc.ui.settings.SettingsScreen
 
-private enum class Screen { HOME, IMPORT, REVIEW, MANUAL, SELECT, SETTINGS }
+private enum class Screen { HOME, IMPORT, REVIEW, MANUAL, SELECT, HISTORY, HISTORY_DETAIL, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,6 +60,14 @@ class MainActivity : ComponentActivity() {
                 // Фото чека живёт в памяти, пока идёт проверка: поворот экрана
                 // не должен его стирать, а на диск оно не попадает.
                 val reviewPhoto: ReviewPhotoViewModel = viewModel()
+                // История живёт в ViewModel: запись переживает поворот экрана.
+                val historyModel: HistoryViewModel = viewModel()
+                // Открытая запись хранится JSON-ом: поворот не должен
+                // выкидывать из просмотра, пока список ещё не перечитан.
+                var historyEntryJson by rememberSaveable { mutableStateOf<String?>(null) }
+                // Одна сессия расчёта = одна запись в истории: повторный
+                // «Дальше» не плодит дубли, а новый чек получает новый id.
+                var checkSessionId by rememberSaveable { mutableStateOf<String?>(null) }
                 // rememberSaveable: поворот экрана или пересоздание Activity
                 // не должны выбрасывать человека с текущего экрана.
                 var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
@@ -97,6 +110,7 @@ class MainActivity : ComponentActivity() {
                                 manualJson = null
                                 screenName = Screen.MANUAL.name
                             },
+                            onHistory = { screenName = Screen.HISTORY.name },
                             onOpenSettings = { screenName = Screen.SETTINGS.name },
                         )
 
@@ -115,6 +129,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onRecognized = { receipt, photoBytes ->
                                 reviewPhoto.set(photoBytes)
+                                checkSessionId = UUID.randomUUID().toString()
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                                 val draftValue = ReceiptDraft.fromReceipt(receipt)
                                 draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), draftValue)
@@ -137,6 +152,7 @@ class MainActivity : ComponentActivity() {
                                 // Ручной чек идёт тем же путём, что распознанный:
                                 // сначала receipt.v1, потом черновик проверки. Фото нет.
                                 reviewPhoto.clear()
+                                checkSessionId = UUID.randomUUID().toString()
                                 val receipt = ManualReceipt.toReceipt(entered)
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                                 val reviewDraft = ReceiptDraft.fromReceipt(receipt)
@@ -195,9 +211,52 @@ class MainActivity : ComponentActivity() {
                                     onNext = {
                                         // Сессия проверки закончена — фото больше не нужно.
                                         reviewPhoto.clear()
+                                        val finishedDraft = draft
+                                        if (finishedDraft != null) {
+                                            historyModel.save(
+                                                HistoryEntry(
+                                                    id = checkSessionId
+                                                        ?: UUID.randomUUID().toString(),
+                                                    createdAt = System.currentTimeMillis(),
+                                                    merchant = lastReceipt?.merchant,
+                                                    draft = finishedDraft,
+                                                    selection = current,
+                                                ),
+                                            )
+                                        }
                                         screenName = Screen.HOME.name
                                     },
                                     onBack = { screenName = Screen.REVIEW.name },
+                                )
+                            }
+                        }
+
+                        Screen.HISTORY -> HistoryScreen(
+                            entries = historyModel.entries,
+                            onOpen = { entry ->
+                                historyEntryJson = receiptJson.encodeToString(
+                                    HistoryEntry.serializer(),
+                                    entry,
+                                )
+                                screenName = Screen.HISTORY_DETAIL.name
+                            },
+                            onDelete = { entry -> historyModel.delete(entry.id) },
+                            onClear = { historyModel.clear() },
+                            onBack = { screenName = Screen.HOME.name },
+                        )
+
+                        Screen.HISTORY_DETAIL -> {
+                            val entry = historyEntryJson?.let {
+                                runCatching {
+                                    receiptJson.decodeFromString(HistoryEntry.serializer(), it)
+                                }.getOrNull()
+                            }
+                            if (entry == null) {
+                                screenName = Screen.HISTORY.name
+                            } else {
+                                HistoryDetailScreen(
+                                    entry = entry,
+                                    onBack = { screenName = Screen.HISTORY.name },
                                 )
                             }
                         }
@@ -218,6 +277,7 @@ private fun HomeScreen(
     lastReceipt: Receipt?,
     onImport: () -> Unit,
     onManual: () -> Unit,
+    onHistory: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
@@ -243,6 +303,12 @@ private fun HomeScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             ) {
                 Text("Ввести вручную")
+            }
+            OutlinedButton(
+                onClick = onHistory,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                Text("История")
             }
             Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
                 Text("Настройки")
