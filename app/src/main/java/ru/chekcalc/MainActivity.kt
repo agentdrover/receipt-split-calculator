@@ -28,9 +28,11 @@ import ru.chekcalc.storage.EncryptedSecretStore
 import ru.chekcalc.storage.SettingsRepository
 import ru.chekcalc.ui.ChekCalcTheme
 import ru.chekcalc.ui.import.PhotoImportScreen
+import ru.chekcalc.ui.review.ReceiptDraft
+import ru.chekcalc.ui.review.ReviewScreen
 import ru.chekcalc.ui.settings.SettingsScreen
 
-private enum class Screen { HOME, IMPORT, SETTINGS }
+private enum class Screen { HOME, IMPORT, REVIEW, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,6 +52,11 @@ class MainActivity : ComponentActivity() {
                 var lastReceiptJson by rememberSaveable { mutableStateOf<String?>(null) }
                 val lastReceipt = lastReceiptJson?.let {
                     runCatching { receiptJson.decodeFromString<Receipt>(it) }.getOrNull()
+                }
+                // Черновик проверки переживает поворот: правки не теряются.
+                var draftJson by rememberSaveable { mutableStateOf<String?>(null) }
+                val draft = draftJson?.let {
+                    runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
                 }
                 val screen = Screen.valueOf(screenName)
 
@@ -75,10 +82,29 @@ class MainActivity : ComponentActivity() {
                         },
                         onRecognized = { receipt ->
                             lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
-                            screenName = Screen.HOME.name
+                            val draftValue = ReceiptDraft.fromReceipt(receipt)
+                            draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), draftValue)
+                            screenName = Screen.REVIEW.name
                         },
                         onBack = { screenName = Screen.HOME.name },
                     )
+
+                    Screen.REVIEW -> {
+                        val current = draft
+                        if (current == null) {
+                            screenName = Screen.HOME.name
+                        } else {
+                            ReviewScreen(
+                                draft = current,
+                                onChange = { updated ->
+                                    draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), updated)
+                                },
+                                // Выбор позиций появится в #2297.
+                                onNext = { screenName = Screen.HOME.name },
+                                onBack = { screenName = Screen.HOME.name },
+                            )
+                        }
+                    }
 
                     Screen.SETTINGS -> SettingsScreen(
                         repository = repository,
