@@ -1,6 +1,9 @@
 package ru.chekcalc.ui.review
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,7 +68,10 @@ fun ReviewScreen(
     val hasInvalidInput = invalidTotal || invalidItems
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(22.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "header") {
