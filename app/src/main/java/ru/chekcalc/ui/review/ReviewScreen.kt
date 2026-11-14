@@ -226,11 +226,11 @@ private fun TotalsCard(draft: ReceiptDraft, onEdit: () -> Unit) {
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onEdit),
     ) {
-        TotalRow("Итог", Money.format(draft.totalKopecks), bold = true)
+        TotalRow("Итог", formatKopecks(draft.totalKopecks), bold = true)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        TotalRow("Скидка", Money.format(draft.discountKopecks))
+        TotalRow("Скидка", formatKopecks(draft.discountKopecks))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        TotalRow("Обслуживание", Money.format(draft.serviceKopecks))
+        TotalRow("Обслуживание", formatKopecks(draft.serviceKopecks))
     }
 }
 
@@ -307,14 +307,14 @@ private fun ItemRow(item: DraftItem, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${item.qty?.let { formatQty(it) } ?: "1"} × ${Money.format(item.unitPriceKopecks)}",
+                text = "${item.qty?.let { formatQty(it) } ?: "1"} × ${formatKopecks(item.unitPriceKopecks)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
         Text(
-            text = Money.format(item.amountKopecks),
+            text = formatKopecks(item.amountKopecks),
             style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
             modifier = Modifier.padding(start = 12.dp),
         )
@@ -387,7 +387,16 @@ private fun ReviewPhotoCard(
                     .size(34.dp, 44.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
-            )
+            ) {
+                bitmap?.let { thumb ->
+                    Image(
+                        bitmap = thumb,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
             Text(
                 text = "Фото чека",
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
@@ -508,6 +517,12 @@ private fun ItemEditSheet(
                     onValueChange = { onChange(state.copy(qtyText = it)) },
                     label = { Text("Кол-во") },
                     singleLine = true,
+                    isError = state.qtyText.isNotBlank() && state.qty == null,
+                    supportingText = if (state.qtyText.isNotBlank() && state.qty == null) {
+                        { Text("Введите число") }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                 )
@@ -604,7 +619,7 @@ private fun TotalsEditSheet(
                 onClick = { onSave(state) },
                 enabled = state.valid,
                 shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(52.dp),
             ) {
                 Text("Сохранить")
             }
@@ -805,6 +820,17 @@ internal fun parseQty(text: String): Double? {
     val value = normalized.toDoubleOrNull() ?: return null
     if (!value.isFinite() || value < 0 || value > ReceiptDraft.MAX_QTY) return null
     return value
+}
+
+/** Сумма для экрана проверки: копейки и разряды, как в макете: 1 240,00 ₽. */
+internal fun formatKopecks(kopecks: Long): String {
+    if (kopecks == Long.MIN_VALUE) return "—"
+    val sign = if (kopecks < 0) "−" else ""
+    val value = kotlin.math.abs(kopecks)
+    val rubles = value / 100
+    val rest = value % 100
+    val grouped = rubles.toString().reversed().chunked(3).joinToString(" ").reversed()
+    return "$sign$grouped,${rest.toString().padStart(2, '0')} ₽"
 }
 
 /** Копейки в рубли для поля ввода: 39025 → «390.25». */
