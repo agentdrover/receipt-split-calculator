@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,13 +29,15 @@ import ru.chekcalc.storage.EncryptedSecretStore
 import ru.chekcalc.storage.SettingsRepository
 import ru.chekcalc.ui.ChekCalcTheme
 import ru.chekcalc.ui.import.PhotoImportScreen
+import ru.chekcalc.ui.manual.ManualEntryScreen
+import ru.chekcalc.ui.manual.ManualReceipt
 import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.ReviewScreen
 import ru.chekcalc.ui.select.SelectionScreen
 import ru.chekcalc.ui.select.SelectionState
 import ru.chekcalc.ui.settings.SettingsScreen
 
-private enum class Screen { HOME, IMPORT, REVIEW, SELECT, SETTINGS }
+private enum class Screen { HOME, IMPORT, REVIEW, MANUAL, SELECT, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +68,11 @@ class MainActivity : ComponentActivity() {
                 val selection = selectionJson?.let {
                     runCatching { receiptJson.decodeFromString<SelectionState>(it) }.getOrNull()
                 }
+                // Форма ручного ввода тоже переживает поворот экрана.
+                var manualJson by rememberSaveable { mutableStateOf<String?>(null) }
+                val manualDraft = manualJson?.let {
+                    runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
+                } ?: ReceiptDraft()
                 val draft = draftJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
                 }
@@ -74,6 +82,10 @@ class MainActivity : ComponentActivity() {
                     Screen.HOME -> HomeScreen(
                         lastReceipt = lastReceipt,
                         onImport = { screenName = Screen.IMPORT.name },
+                        onManual = {
+                            manualJson = null
+                            screenName = Screen.MANUAL.name
+                        },
                         onOpenSettings = { screenName = Screen.SETTINGS.name },
                     )
 
@@ -94,6 +106,28 @@ class MainActivity : ComponentActivity() {
                             lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                             val draftValue = ReceiptDraft.fromReceipt(receipt)
                             draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), draftValue)
+                            screenName = Screen.REVIEW.name
+                        },
+                        onManualEntry = {
+                            manualJson = null
+                            screenName = Screen.MANUAL.name
+                        },
+                        onBack = { screenName = Screen.HOME.name },
+                    )
+
+                    Screen.MANUAL -> ManualEntryScreen(
+                        draft = manualDraft,
+                        onChange = { updated ->
+                            manualJson = receiptJson.encodeToString(ReceiptDraft.serializer(), updated)
+                        },
+                        onNext = { entered ->
+                            // Ручной чек идёт тем же путём, что распознанный:
+                            // сначала receipt.v1, потом черновик проверки.
+                            val receipt = ManualReceipt.toReceipt(entered)
+                            lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
+                            val reviewDraft = ReceiptDraft.fromReceipt(receipt)
+                            draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), reviewDraft)
+                            manualJson = null
                             screenName = Screen.REVIEW.name
                         },
                         onBack = { screenName = Screen.HOME.name },
@@ -160,6 +194,7 @@ class MainActivity : ComponentActivity() {
 private fun HomeScreen(
     lastReceipt: Receipt?,
     onImport: () -> Unit,
+    onManual: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
@@ -179,6 +214,12 @@ private fun HomeScreen(
             }
             Button(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
                 Text("Загрузить чек")
+            }
+            OutlinedButton(
+                onClick = onManual,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                Text("Ввести вручную")
             }
             Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
                 Text("Настройки")

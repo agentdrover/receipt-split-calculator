@@ -202,7 +202,7 @@ fun ReviewScreen(
 
 /** Денежное поле без собственного состояния: текст живёт в вызывающем экране. */
 @Composable
-private fun MoneyField(
+internal fun MoneyField(
     label: String,
     text: String,
     invalid: Boolean,
@@ -226,7 +226,7 @@ private fun MoneyField(
 }
 
 @Composable
-private fun QuantityField(
+internal fun QuantityField(
     text: String,
     invalid: Boolean,
     onTextChange: (String) -> Unit,
