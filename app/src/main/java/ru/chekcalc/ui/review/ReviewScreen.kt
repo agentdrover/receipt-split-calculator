@@ -66,6 +66,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.chekcalc.calc.Money
 import ru.chekcalc.calc.rublesToKopecks
+import androidx.activity.compose.BackHandler
+import ru.chekcalc.ui.components.BackButton
 
 /**
  * Экран «Проверьте чек» по макету docs/mockups/review-check-apple.png.
@@ -82,6 +84,9 @@ fun ReviewScreen(
     onBack: () -> Unit = {},
     photo: ByteArray? = null,
 ) {
+    // Системный Back и жест возвращают на главный экран, а не закрывают приложение.
+    BackHandler { onBack() }
+
     // Лист правки переживает поворот: несохранённый ввод не теряется.
     var itemSheetOpen by rememberSaveable { mutableStateOf(false) }
     var editingItem by rememberSaveable(stateSaver = ItemEditStateSaver) {
@@ -197,12 +202,7 @@ fun ReviewScreen(
 @Composable
 private fun ReviewHeader(draft: ReceiptDraft, onBack: () -> Unit) {
     Column {
-        TextButton(
-            onClick = onBack,
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-        ) {
-            Text("‹ Назад", color = MaterialTheme.colorScheme.primary)
-        }
+        BackButton(onClick = onBack)
         Text(
             text = "Проверьте чек",
             style = MaterialTheme.typography.headlineLarge.copy(fontFamily = FontFamily.Serif),
