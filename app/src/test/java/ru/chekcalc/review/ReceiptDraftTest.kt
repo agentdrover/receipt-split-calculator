@@ -55,7 +55,8 @@ class ReceiptDraftTest {
         assertTrue("ожидаемая сумма по формуле: $warning", warning.contains("ожидалось 300 ₽"))
         assertTrue("итог чека: $warning", warning.contains("в чеке 350 ₽"))
         assertTrue("разница: $warning", warning.contains("разница 50 ₽"))
-        assertTrue("итог больше — подсказка про пропущенную строку", warning.contains("пропущена"))
+        assertTrue("без скидки и обслуживания — подсказка про нераспознанную строку",
+            warning.contains("строка не распознана"))
     }
 
     @Test
@@ -66,7 +67,7 @@ class ReceiptDraftTest {
 
         assertTrue("ожидалось 100 ₽: $warning", warning.contains("ожидалось 100 ₽"))
         assertTrue("разница −20 ₽: $warning", warning.contains("разница −20 ₽"))
-        assertTrue("подсказка должна говорить про скидку или цену", warning.contains("скидку"))
+        assertTrue("без скидки подсказка про цену строки", warning.contains("цена строки"))
     }
 
     @Test
@@ -99,6 +100,49 @@ class ReceiptDraftTest {
         assertTrue("обслуживание должно прибавляться: $warning", warning.contains("ожидалось 110 ₽"))
         assertTrue("итог чека: $warning", warning.contains("в чеке 130 ₽"))
         assertTrue("разница +20: $warning", warning.contains("разница 20 ₽"))
+    }
+
+    @Test
+    fun `подсказка называет скидку, когда она есть`() {
+        val draft = ReceiptDraft(
+            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
+            discountKopecks = 10_00,
+            totalKopecks = 150_00,
+        )
+
+        val warning = draft.residualWarning()!!
+
+        assertTrue("скидка участвует — подсказка про неё: $warning", warning.contains("скидке"))
+        assertFalse("про нераспознанную строку при скидке не говорим", warning.contains("строка не распознана"))
+    }
+
+    @Test
+    fun `подсказка называет обслуживание, когда оно есть`() {
+        val draft = ReceiptDraft(
+            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
+            serviceKopecks = 10_00,
+            totalKopecks = 150_00,
+        )
+
+        val warning = draft.residualWarning()!!
+
+        assertTrue("обслуживание участвует — подсказка про него: $warning", warning.contains("обслуживании"))
+        assertFalse(warning.contains("строка не распознана"))
+    }
+
+    @Test
+    fun `при скидке и обслуживании подсказка называет оба`() {
+        val draft = ReceiptDraft(
+            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
+            discountKopecks = 10_00,
+            serviceKopecks = 5_00,
+            totalKopecks = 150_00,
+        )
+
+        val warning = draft.residualWarning()!!
+
+        assertTrue("скидка: $warning", warning.contains("скидке"))
+        assertTrue("обслуживание: $warning", warning.contains("обслуживании"))
     }
 
     @Test
