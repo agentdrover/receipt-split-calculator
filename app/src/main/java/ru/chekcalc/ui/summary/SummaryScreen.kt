@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import ru.chekcalc.calc.Money
 import ru.chekcalc.storage.Payer
+import ru.chekcalc.ui.components.BackButton
 
 /**
  * Экран итога: разбивка суммы и отправка её тому, кому переводить.
@@ -62,7 +63,7 @@ fun SummaryScreen(
             .padding(22.dp)
             .verticalScroll(rememberScrollState()),
     ) {
-        TextButton(onClick = onBack) { Text("Назад") }
+        BackButton(onClick = onBack)
         Text("Итог", style = MaterialTheme.typography.headlineSmall)
         Text(
             text = "Переведите эту сумму: ${Money.format(summary.totalKopecks)}",

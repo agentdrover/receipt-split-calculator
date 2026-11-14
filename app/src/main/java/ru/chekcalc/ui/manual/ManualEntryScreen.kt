@@ -34,6 +34,7 @@ import ru.chekcalc.ui.review.formatQty
 import ru.chekcalc.ui.review.parseQty
 import ru.chekcalc.ui.review.parseRubles
 import ru.chekcalc.ui.review.rublesText
+import ru.chekcalc.ui.components.BackButton
 
 /**
  * Ручной ввод чека: позиции, итог, скидка и обслуживание.
@@ -92,7 +93,7 @@ fun ManualEntryScreen(
     ) {
         item(key = "header") {
             Column {
-                TextButton(onClick = onBack) { Text("Назад") }
+                BackButton(onClick = onBack)
                 Text("Введите чек вручную", style = MaterialTheme.typography.headlineSmall)
                 Text(
                     text = "Внесите позиции как в чеке. Дальше покажем экран проверки — там можно поправить.",

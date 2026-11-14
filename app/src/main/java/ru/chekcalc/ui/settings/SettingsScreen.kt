@@ -34,6 +34,8 @@ import ru.chekcalc.storage.ProviderPreset
 import ru.chekcalc.storage.ProviderSettings
 import ru.chekcalc.storage.SaveResult
 import ru.chekcalc.storage.SettingsRepository
+import androidx.activity.compose.BackHandler
+import ru.chekcalc.ui.components.BackButton
 
 /**
  * Экран настроек провайдера.
@@ -50,6 +52,9 @@ fun SettingsScreen(
     onBack: () -> Unit = {},
 ) {
     var provider by remember { mutableStateOf(repository.activeProvider()) }
+    // Системный Back и жест возвращают на главный экран.
+    BackHandler { onBack() }
+
     var saved by remember { mutableStateOf(repository.load()) }
     var apiKey by remember { mutableStateOf(saved.apiKey) }
     var baseUrl by remember { mutableStateOf(saved.baseUrl) }
@@ -72,7 +77,7 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(22.dp),
     ) {
-        TextButton(onClick = onBack) { Text("Назад") }
+        BackButton(onClick = onBack)
         Text("Настройки", style = MaterialTheme.typography.headlineSmall)
         Text(
             "Приложение ходит к провайдеру напрямую. Ключи хранятся только на этом телефоне, у каждого провайдера свой.",

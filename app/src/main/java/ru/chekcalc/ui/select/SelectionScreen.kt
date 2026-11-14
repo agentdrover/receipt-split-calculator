@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import ru.chekcalc.calc.Money
 import ru.chekcalc.ui.review.parseRubles
 import ru.chekcalc.ui.review.rublesText
+import androidx.activity.compose.BackHandler
+import ru.chekcalc.ui.components.BackButton
 
 /**
  * Экран «Что ваше»: отметки позиций, доли общих и чаевые.
@@ -49,6 +51,9 @@ fun SelectionScreen(
     onNext: () -> Unit = {},
     onBack: () -> Unit = {},
 ) {
+    // Системный Back и жест возвращают к проверке, а не закрывают приложение.
+    BackHandler { onBack() }
+
     var tipText by rememberSaveable { mutableStateOf(if (state.tipFixedKopecks > 0) rublesText(state.tipFixedKopecks) else "") }
 
     // Android 15 принудительно edge-to-edge: без инсетов «Назад» уходит под
@@ -59,7 +64,7 @@ fun SelectionScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(22.dp),
     ) {
-        TextButton(onClick = onBack) { Text("Назад") }
+        BackButton(onClick = onBack)
         Text("Что ваше", style = MaterialTheme.typography.headlineSmall)
         Text(
             "Отметьте свои позиции. Общие можно разделить на 2–6 человек.",
