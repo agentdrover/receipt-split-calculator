@@ -30,9 +30,11 @@ import ru.chekcalc.ui.ChekCalcTheme
 import ru.chekcalc.ui.import.PhotoImportScreen
 import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.ReviewScreen
+import ru.chekcalc.ui.select.SelectionScreen
+import ru.chekcalc.ui.select.SelectionState
 import ru.chekcalc.ui.settings.SettingsScreen
 
-private enum class Screen { HOME, IMPORT, REVIEW, SETTINGS }
+private enum class Screen { HOME, IMPORT, REVIEW, SELECT, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,6 +57,14 @@ class MainActivity : ComponentActivity() {
                 }
                 // Черновик проверки переживает поворот: правки не теряются.
                 var draftJson by rememberSaveable { mutableStateOf<String?>(null) }
+                // Выбор позиций тоже переживает поворот.
+                var selectionJson by rememberSaveable { mutableStateOf<String?>(null) }
+                // Из какого черновика построен выбор: возврат «Назад → Дальше»
+                // без правок не должен сбрасывать отметки и чаевые.
+                var selectionSourceJson by rememberSaveable { mutableStateOf<String?>(null) }
+                val selection = selectionJson?.let {
+                    runCatching { receiptJson.decodeFromString<SelectionState>(it) }.getOrNull()
+                }
                 val draft = draftJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
                 }
@@ -99,9 +109,39 @@ class MainActivity : ComponentActivity() {
                                 onChange = { updated ->
                                     draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), updated)
                                 },
-                                // Выбор позиций появится в #2297.
-                                onNext = { screenName = Screen.HOME.name },
+                                onNext = {
+                                    val source = draftJson
+                                    if (selection == null || selectionSourceJson != source) {
+                                        val fromDraft = SelectionState.fromDraft(current)
+                                        selectionJson = receiptJson.encodeToString(
+                                            SelectionState.serializer(),
+                                            fromDraft,
+                                        )
+                                        selectionSourceJson = source
+                                    }
+                                    screenName = Screen.SELECT.name
+                                },
                                 onBack = { screenName = Screen.HOME.name },
+                            )
+                        }
+                    }
+
+                    Screen.SELECT -> {
+                        val current = selection
+                        if (current == null) {
+                            screenName = Screen.HOME.name
+                        } else {
+                            SelectionScreen(
+                                state = current,
+                                onChange = { updated ->
+                                    selectionJson = receiptJson.encodeToString(
+                                        SelectionState.serializer(),
+                                        updated,
+                                    )
+                                },
+                                // Экран итога появится в #2298.
+                                onNext = { screenName = Screen.HOME.name },
+                                onBack = { screenName = Screen.REVIEW.name },
                             )
                         }
                     }

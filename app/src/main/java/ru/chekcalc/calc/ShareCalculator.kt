@@ -51,7 +51,11 @@ data class Breakdown(
  */
 object ShareCalculator {
 
-    fun calculate(input: CalcInput): Breakdown {
+    /**
+     * @param roundToRuble округлять итог до рубля. Для базы чаевых нужен
+     * ответ в копейках: иначе 100,46 ₽ превращаются в 100 ₽ и процент врёт.
+     */
+    fun calculate(input: CalcInput, roundToRuble: Boolean = true): Breakdown {
         val subtotal = input.lines.sumOf { it.amountKopecks }
         val mine = input.lines.fold(Fraction.ZERO) { acc, line ->
             acc + Fraction.of(line.amountKopecks) * line.share
@@ -82,8 +86,49 @@ object ShareCalculator {
             discountKopecks = myDiscount.roundKopecks(),
             serviceKopecks = myService.roundKopecks(),
             tipKopecks = input.tipKopecks,
-            totalKopecks = (withService + Fraction.of(input.tipKopecks)).roundToRuble(),
+            totalKopecks = (withService + Fraction.of(input.tipKopecks)).let {
+                if (roundToRuble) it.roundToRuble() else it.roundKopecks()
+            },
         )
+    }
+
+    /**
+     * Итог точно, в копейках, без округления до рубля.
+     * Нужен там, где от суммы берут процент (чаевые): округление базы
+     * сдвигает результат на рубль.
+     */
+    fun totalExact(input: CalcInput): BigDecimal = totalFraction(input).toBigDecimal()
+
+    /** Точный итог как дробь — для расчётов, где округлять нельзя. */
+    internal fun totalFraction(input: CalcInput): Fraction {
+        val subtotal = BigDecimal.valueOf(input.lines.sumOf { it.amountKopecks })
+        val mine = input.lines.fold(Fraction.ZERO) { acc, line ->
+            acc + Fraction.of(line.amountKopecks) * line.share
+        }
+        val sub = Fraction.of(input.lines.sumOf { it.amountKopecks })
+        val discount = Fraction.of(input.discountKopecks)
+        val service = Fraction.of(input.serviceKopecks)
+        val base = sub - discount
+        val afterDiscount = if (sub.isZero) mine else mine * (sub - discount) / sub
+        val withService = when {
+            !base.isZero -> afterDiscount * (base + service) / base
+            service.isZero -> afterDiscount
+            sub.isZero -> afterDiscount
+            else -> afterDiscount + service * (mine / sub)
+        }
+        return withService + Fraction.of(input.tipKopecks)
+    }
+
+    /**
+     * Итог с чаевыми-процентом от своей части, посчитанный одной дробью.
+     *
+     * Считать чаевые отдельно и складывать нельзя: 410/23 + 15 % — это ровно
+     * 20,50 ₽, но два приближения по 40 знаков дают 20,4999… и рубль теряется.
+     */
+    fun totalWithPercentTip(input: CalcInput, percent: Int): BigDecimal {
+        require(percent in 0..100) { "процент 0…100" }
+        val withTip = totalFraction(input) * Fraction.of((100 + percent).toLong(), 100)
+        return withTip.toBigDecimal()
     }
 
     /** residual = итог чека − (позиции − скидка + обслуживание). Больше 1 ₽ — чек не сошёлся. */
@@ -120,7 +165,7 @@ internal class Fraction private constructor(
 
     fun roundToRuble(): Long = toBigDecimal().setScale(-2, RoundingMode.HALF_UP).toLong()
 
-    private fun toBigDecimal(): BigDecimal =
+    fun toBigDecimal(): BigDecimal =
         BigDecimal(numerator).divide(BigDecimal(denominator), 40, RoundingMode.HALF_UP)
 
     companion object {
