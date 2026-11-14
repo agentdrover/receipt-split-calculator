@@ -211,10 +211,14 @@ fun ManualEntryScreen(
                 }) { Text("Добавить позицию") }
                 if (!ready) {
                     Text(
-                        text = if (!hasItems) {
-                            "Добавьте хотя бы одну позицию с названием."
-                        } else {
-                            "Проверьте выделенные поля."
+                        // Подсказка называет настоящую причину: позиций нет,
+                        // строка пустая или в полях ошибка. «Добавьте позицию»
+                        // при уже добавленной строке вводила бы в заблуждение.
+                        text = when {
+                            draft.items.isEmpty() -> "Добавьте хотя бы одну позицию с названием."
+                            draft.items.all { it.name.isBlank() && it.amountKopecks == 0L } ->
+                                "Заполните позицию или удалите пустую строку."
+                            else -> "Проверьте выделенные поля."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 4.dp),
