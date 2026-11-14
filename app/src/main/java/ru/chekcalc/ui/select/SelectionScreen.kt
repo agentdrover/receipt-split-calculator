@@ -1,12 +1,17 @@
 package ru.chekcalc.ui.select
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -46,7 +51,14 @@ fun SelectionScreen(
 ) {
     var tipText by rememberSaveable { mutableStateOf(if (state.tipFixedKopecks > 0) rublesText(state.tipFixedKopecks) else "") }
 
-    Column(modifier = Modifier.fillMaxSize().padding(22.dp)) {
+    // Android 15 принудительно edge-to-edge: без инсетов «Назад» уходит под
+    // статус-бар, а «Дальше» — под панель навигации.
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(22.dp),
+    ) {
         TextButton(onClick = onBack) { Text("Назад") }
         Text("Что ваше", style = MaterialTheme.typography.headlineSmall)
         Text(
@@ -77,7 +89,9 @@ fun SelectionScreen(
                         if (whole || shared != null) {
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.padding(start = 48.dp, top = 4.dp),
+                                modifier = Modifier
+                                    .padding(start = 48.dp, top = 4.dp)
+                                    .horizontalScroll(rememberScrollState()),
                             ) {
                                 state.denominatorChoices.forEach { denominator ->
                                     FilterChip(
@@ -110,8 +124,15 @@ fun SelectionScreen(
                 )
             }
         }
+        val tipCaption = when {
+            state.tipPercent != null && state.tipKopecks > 0 ->
+                "% от вашей части: ${Money.format(state.tipKopecks)}"
+            state.tipPercent != null -> "% от вашей части"
+            state.tipKopecks > 0 -> "своя сумма: ${Money.format(state.tipKopecks)}"
+            else -> "% от вашей части"
+        }
         Text(
-            text = "% от вашей части${if (state.tipKopecks > 0) ": ${Money.format(state.tipKopecks)}" else ""}",
+            text = tipCaption,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 4.dp),
         )
