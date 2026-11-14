@@ -1,0 +1,133 @@
+package ru.chekcalc.ui.summary
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
+import android.content.Intent
+
+/**
+ * Экран итога: разбивка суммы и отправка её тому, кому переводить.
+ *
+ * Ничего не пересчитывает: сумма приходит готовой из выбора позиций.
+ * Копирование и «Поделиться» отдают один и тот же текст.
+ */
+@Composable
+fun SummaryScreen(
+    summary: ReceiptSummary,
+    onDone: () -> Unit = {},
+    onBack: () -> Unit = {},
+) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val text = summary.shareText()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(22.dp),
+    ) {
+        TextButton(onClick = onBack) { Text("Назад") }
+        Text("Итог", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            text = "Переведите эту сумму: ${summary.totalKopecks.let(ru.chekcalc.calc.Money::format)}",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+        )
+
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    summary.lines().forEach { (label, value) ->
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(text = value, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            }
+
+            Text(
+                text = "Итог округлён до рубля — так проще переводить.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+
+            if (summary.ownItems + summary.sharedItems > 0) {
+                Text(
+                    text = "Позиций: ${summary.ownItems} своих, ${summary.sharedItems} общих",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("ВАША ЧАСТЬ", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        text = ru.chekcalc.calc.Money.format(summary.totalKopecks),
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
+                }
+            }
+        }
+
+        OutlinedButton(
+            onClick = { clipboard.setText(AnnotatedString(text)) },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) {
+            Text("Скопировать")
+        }
+
+        OutlinedButton(
+            onClick = {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                context.startActivity(Intent.createChooser(send, "Поделиться расчётом"))
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) {
+            Text("Поделиться")
+        }
+
+        Button(
+            onClick = onDone,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) {
+            Text("Готово")
+        }
+    }
+}

@@ -31,10 +31,12 @@ import ru.chekcalc.ui.import.PhotoImportScreen
 import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.ReviewScreen
 import ru.chekcalc.ui.select.SelectionScreen
+import ru.chekcalc.ui.summary.ReceiptSummary
+import ru.chekcalc.ui.summary.SummaryScreen
 import ru.chekcalc.ui.select.SelectionState
 import ru.chekcalc.ui.settings.SettingsScreen
 
-private enum class Screen { HOME, IMPORT, REVIEW, SELECT, SETTINGS }
+private enum class Screen { HOME, IMPORT, REVIEW, SELECT, SUMMARY, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,6 +64,11 @@ class MainActivity : ComponentActivity() {
                 // Из какого черновика построен выбор: возврат «Назад → Дальше»
                 // без правок не должен сбрасывать отметки и чаевые.
                 var selectionSourceJson by rememberSaveable { mutableStateOf<String?>(null) }
+                // Итог фиксируется на момент перехода: экран итога не пересчитывает.
+                var summaryJson by rememberSaveable { mutableStateOf<String?>(null) }
+                val summary = summaryJson?.let {
+                    runCatching { receiptJson.decodeFromString<ReceiptSummary>(it) }.getOrNull()
+                }
                 val selection = selectionJson?.let {
                     runCatching { receiptJson.decodeFromString<SelectionState>(it) }.getOrNull()
                 }
@@ -139,9 +146,37 @@ class MainActivity : ComponentActivity() {
                                         updated,
                                     )
                                 },
-                                // Экран итога появится в #2298.
-                                onNext = { screenName = Screen.HOME.name },
+                                onNext = {
+                                    // current уже содержит последнее изменение:
+                                    // состояние перечитывается из selectionJson.
+                                    val built = ReceiptSummary.from(current)
+                                    summaryJson = receiptJson.encodeToString(
+                                        ReceiptSummary.serializer(),
+                                        built,
+                                    )
+                                    screenName = Screen.SUMMARY.name
+                                },
                                 onBack = { screenName = Screen.REVIEW.name },
+                            )
+                        }
+                    }
+
+                    Screen.SUMMARY -> {
+                        val current = summary
+                        if (current == null) {
+                            screenName = Screen.HOME.name
+                        } else {
+                            SummaryScreen(
+                                summary = current,
+                                onDone = {
+                                    screenName = Screen.HOME.name
+                                    lastReceiptJson = null
+                                    draftJson = null
+                                    selectionJson = null
+                                    selectionSourceJson = null
+                                    summaryJson = null
+                                },
+                                onBack = { screenName = Screen.SELECT.name },
                             )
                         }
                     }
