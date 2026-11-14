@@ -84,6 +84,21 @@ data class SelectionState(
             CalcInput(lines = lines()),
         ).totalKopecks
 
+    /** Сумма долей позиций точно, в копейках: 390,25 ₽ остаются 390,25 ₽. */
+    val itemsShareExactKopecks: Long
+        get() = ShareCalculator.totalExact(CalcInput(lines = lines()))
+            .setScale(0, RoundingMode.HALF_UP)
+            .toLong()
+
+    private val breakdown: ru.chekcalc.calc.Breakdown
+        get() = ShareCalculator.calculate(baseInput(), roundToRuble = false)
+
+    /** Моя доля скидки — для разбивки на экране итога. */
+    val discountShareKopecks: Long get() = breakdown.discountKopecks
+
+    /** Моя доля обслуживания — для разбивки на экране итога. */
+    val serviceShareKopecks: Long get() = breakdown.serviceKopecks
+
     /** Своя часть в копейках точно, без округления — база для процента. */
     val billShareExactKopecks: BigDecimal
         get() = ShareCalculator.totalExact(
