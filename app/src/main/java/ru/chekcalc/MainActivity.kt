@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -37,10 +39,20 @@ import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.ReviewPhotoViewModel
 import ru.chekcalc.ui.review.ReviewScreen
 import ru.chekcalc.ui.select.SelectionScreen
+import ru.chekcalc.storage.Payer
+import ru.chekcalc.storage.PayerStore
 import ru.chekcalc.ui.select.SelectionState
+import ru.chekcalc.ui.summary.ReceiptSummary
+import ru.chekcalc.ui.summary.SummaryScreen
 import ru.chekcalc.ui.settings.SettingsScreen
 
-private enum class Screen { HOME, IMPORT, REVIEW, MANUAL, SELECT, SETTINGS }
+private enum class Screen { HOME, IMPORT, REVIEW, MANUAL, SELECT, SUMMARY, SETTINGS }
+
+/** Сохранение реквизитов в состоянии экрана: две строки переживают поворот и смерть процесса. */
+val PayerSaver: Saver<Payer, Any> = listSaver(
+    save = { listOf(it.name, it.phone) },
+    restore = { saved -> Payer(saved[0].toString(), saved[1].toString()) },
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,6 +83,16 @@ class MainActivity : ComponentActivity() {
                 // Из какого черновика построен выбор: возврат «Назад → Дальше»
                 // без правок не должен сбрасывать отметки и чаевые.
                 var selectionSourceJson by rememberSaveable { mutableStateOf<String?>(null) }
+                // Итог фиксируется на момент перехода: экран итога не пересчитывает.
+                var summaryJson by rememberSaveable { mutableStateOf<String?>(null) }
+                val summary = summaryJson?.let {
+                    runCatching { receiptJson.decodeFromString<ReceiptSummary>(it) }.getOrNull()
+                }
+                // Реквизиты платившего: вводятся один раз, живут только на устройстве.
+                val payerStore = remember { PayerStore(this@MainActivity) }
+                var payer by rememberSaveable(stateSaver = PayerSaver) {
+                    mutableStateOf(payerStore.load())
+                }
                 val selection = selectionJson?.let {
                     runCatching { receiptJson.decodeFromString<SelectionState>(it) }.getOrNull()
                 }
@@ -198,6 +220,31 @@ class MainActivity : ComponentActivity() {
                                         screenName = Screen.HOME.name
                                     },
                                     onBack = { screenName = Screen.REVIEW.name },
+                                )
+                            }
+                        }
+
+                        Screen.SUMMARY -> {
+                            val current = summary
+                            if (current == null) {
+                                screenName = Screen.HOME.name
+                            } else {
+                                SummaryScreen(
+                                    summary = current,
+                                    payer = payer,
+                                    onPayerChange = { updated ->
+                                        payer = updated
+                                        payerStore.save(updated)
+                                    },
+                                    onDone = {
+                                        screenName = Screen.HOME.name
+                                        lastReceiptJson = null
+                                        draftJson = null
+                                        selectionJson = null
+                                        selectionSourceJson = null
+                                        summaryJson = null
+                                    },
+                                    onBack = { screenName = Screen.SELECT.name },
                                 )
                             }
                         }
