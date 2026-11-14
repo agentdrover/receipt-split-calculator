@@ -2,11 +2,14 @@ package ru.chekcalc.ui.manual
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -79,7 +82,12 @@ fun ManualEntryScreen(
     val ready = hasItems && !totalsInvalid && !linesInvalid
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(22.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            // Android 15 рисует приложение edge-to-edge: без инсетов
+            // поля уходят под статус-бар и панель навигации.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "header") {
