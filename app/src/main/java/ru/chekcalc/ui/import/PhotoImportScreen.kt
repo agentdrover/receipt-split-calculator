@@ -10,9 +10,12 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -56,6 +59,7 @@ import java.io.File
 fun PhotoImportScreen(
     recognize: suspend (ByteArray) -> RecognitionResult,
     onRecognized: (Receipt) -> Unit = {},
+    onManualEntry: () -> Unit = {},
     onBack: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -66,7 +70,7 @@ fun PhotoImportScreen(
     var pickedUri by rememberSaveable { mutableStateOf<String?>(null) }
     var capturePath by rememberSaveable { mutableStateOf<String?>(null) }
     var sending by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by rememberSaveable { mutableStateOf<String?>(null) }
     var canRetry by rememberSaveable { mutableStateOf(false) }
     // Пустой чек нельзя переслать тем же фото: нужен другой кадр.
     // Оба поля переживают поворот экрана, иначе блокировка слетала бы.
@@ -88,6 +92,14 @@ fun PhotoImportScreen(
         pendingPath?.let { runCatching { File(it).delete() } }
         pendingPath = null
         onBack()
+    }
+
+    /** Ручной ввод — тоже уход с экрана: временные снимки удаляем. */
+    fun goManual() {
+        deletePickedCapture()
+        pendingPath?.let { runCatching { File(it).delete() } }
+        pendingPath = null
+        onManualEntry()
     }
 
     // Системная кнопка и жест Back идут через ту же уборку, что и «Назад».
@@ -164,6 +176,8 @@ fun PhotoImportScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Android 15: контент не должен уходить под системные панели.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(rememberScrollState())
             .padding(22.dp),
     ) {
@@ -244,6 +258,10 @@ fun PhotoImportScreen(
             // для ошибок, которые повтор действительно может исправить.
             if (picked != null && !sending && canRetry) {
                 TextButton(onClick = { submit() }) { Text("Повторить") }
+            }
+            // Когда распознавание не удалось, чек можно ввести руками.
+            if (!sending) {
+                TextButton(onClick = { goManual() }) { Text("Ввести вручную") }
             }
         }
     }
