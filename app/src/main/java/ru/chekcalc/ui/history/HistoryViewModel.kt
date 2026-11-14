@@ -32,6 +32,10 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     var entries by mutableStateOf<List<HistoryEntry>>(emptyList())
         private set
 
+    /** Сбой записи: показываем его, а не делаем вид, что чек сохранён. */
+    var failure by mutableStateOf(false)
+        private set
+
     init {
         viewModelScope.launch { perform { store.list() } }
     }
@@ -53,7 +57,12 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
             val updated = withContext(Dispatchers.IO) {
                 runCatching(operation).getOrNull()
             }
-            updated?.let { entries = it }
+            if (updated == null) {
+                failure = true
+            } else {
+                entries = updated
+                failure = false
+            }
         }
     }
 }

@@ -126,6 +126,7 @@ class MainActivity : ComponentActivity() {
                     when (screen) {
                         Screen.HOME -> HomeScreen(
                             lastReceipt = lastReceipt,
+                            historyFailure = historyModel.failure,
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
                                 reviewPhoto.clear()
@@ -322,6 +323,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun HomeScreen(
     lastReceipt: Receipt?,
+    historyFailure: Boolean,
     onImport: () -> Unit,
     onManual: () -> Unit,
     onHistory: () -> Unit,
@@ -359,6 +361,14 @@ private fun HomeScreen(
             }
             Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
                 Text("Настройки")
+            }
+            if (historyFailure) {
+                Text(
+                    text = "Не удалось сохранить чек в историю. Попробуйте ещё раз.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
             }
         }
     }
