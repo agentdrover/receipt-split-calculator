@@ -37,3 +37,44 @@ jobs:
 
       - name: Сборка APK
         run: ./gradlew --no-daemon assembleDebug
+
+  report:
+    name: Отчёт в хаб
+    needs: check
+    # Отчёт нужен и при падении проверки: хаб должен видеть именно failure.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Отправить результат
+        env:
+          HUB_TOKEN: ${{ secrets.HUB_CI_TOKEN }}
+          CHECK_RESULT: ${{ needs.check.result }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${HUB_TOKEN}" ]; then
+            echo "::warning::HUB_CI_TOKEN не задан — отчёт в хаб не отправлен"
+            exit 0
+          fi
+
+          # Для pull_request имя ветки приходит отдельно от GITHUB_REF_NAME.
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          if ! [[ "$BRANCH" =~ ^task-([0-9]+)/ ]]; then
+            echo "Ветка '$BRANCH' не задача — отчёт не нужен"
+            exit 0
+          fi
+          TASK="${BASH_REMATCH[1]}"
+
+          BODY=$(printf '{"head_sha":"%s","run_id":"%s","run_attempt":"%s","workflow_path":".github/workflows/android.yml","event":"%s","head_repository":"%s","run_conclusion":"%s","validation_status":"%s","reported_by":"github-actions"}' \
+            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" "$GITHUB_REPOSITORY" "$CHECK_RESULT" "$CHECK_RESULT")
+
+          echo "Отправляю отчёт по задаче #$TASK, результат проверки: $CHECK_RESULT"
+          # Падение отправки не должно красить сам прогон тестов.
+          curl -sS --max-time 30 -X POST \
+            "https://agenthai.ru/api/tasks/${TASK}/ci-run-report" \
+            -H "Authorization: Bearer ${HUB_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            -w 'HTTP %{http_code}\n' \
+            || echo "::warning::Не удалось отправить отчёт в хаб"
