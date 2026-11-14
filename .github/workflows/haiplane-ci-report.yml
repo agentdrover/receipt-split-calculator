@@ -1,0 +1,41 @@
+# Доверенная половина CI-отчёта хаба (#2318).
+#
+# Лежит в default-ветке (main) и запускается по завершении producer-а.
+# `workflow_run` всегда исполняет определение workflow из default-ветки, а
+# github.sha здесь — голова main: код проверяемой ветки не исполняется.
+#
+# Ключ записи (ci_runner) доступен только через environment hub-report, у
+# которого в настройках GitHub ограничение deployment branches = main.
+name: Haiplane CI report
+
+on:
+  workflow_run:
+    # Должно совпадать с name: в android.yml.
+    workflows: [android]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  report:
+    name: Отправить результаты в хаб
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: hub-report
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Отправить отчёт
+        uses: agentdrover/haiplane/.github/actions/hub-ci-send@main
+        with:
+          hub-url: ${{ secrets.HAIPLANE_HUB_URL }}
+          hub-token: ${{ secrets.HAIPLANE_HUB_CI_TOKEN }}
+          # Должно совпадать с workflow_path контракта CI проекта.
+          workflow-path: .github/workflows/android.yml
