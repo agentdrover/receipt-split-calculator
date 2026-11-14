@@ -1,8 +1,15 @@
+# Producer половина подтверждаемого CI-отчёта хаба (#2318).
+#
+# Этот workflow гоняет код проверяемой ветки, поэтому ключа записи здесь нет:
+# только ключ чтения ci_reader для карточки задачи. Коллектор хаба собирает
+# результаты AC и validation в hub-ci-results/, артефакт уезжает с прогоном,
+# а сам отчёт отправляет доверенный отправитель из main
+# (.github/workflows/haiplane-ci-report.yml) после завершения этого прогона.
 name: android
 
 on:
-  push:
   pull_request:
+  push:
 
 permissions:
   contents: read
@@ -16,6 +23,8 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: JDK 17
         uses: actions/setup-java@v4
@@ -30,54 +39,35 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Тесты
+        id: tests
         run: ./gradlew --no-daemon test
 
       - name: Линтер
+        id: lint
         run: ./gradlew --no-daemon lint
 
       - name: Сборка APK
         run: ./gradlew --no-daemon assembleDebug
 
-  report:
-    name: Отчёт в хаб
-    needs: check
-    # Отчёт нужен и при падении проверки: хаб должен видеть именно failure.
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Отправить результат
-        env:
-          HUB_TOKEN: ${{ secrets.HUB_CI_TOKEN }}
-          CHECK_RESULT: ${{ needs.check.result }}
-          # На pull_request github.sha — это merge-коммит, а хаб закрепляет
-          # голову ветки; берём её отдельно.
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          set -uo pipefail
+      # Имена проверок должны покрывать required_checks контракта проекта
+      # (lint и tests); лишние из словаря хаба не мешают.
+      - name: Собрать результаты для хаба
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: agentdrover/haiplane/.github/actions/hub-ci-report@main
+        with:
+          hub-url: ${{ secrets.HAIPLANE_HUB_URL }}
+          hub-read-token: ${{ secrets.HAIPLANE_HUB_CI_READ_TOKEN }}
+          head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+          event-action: ${{ github.event.action }}
+          checks: tests=${{ steps.tests.outcome }},lint=${{ steps.lint.outcome }}
 
-          # Для pull_request имя ветки приходит отдельно от GITHUB_REF_NAME.
-          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          if ! [[ "$BRANCH" =~ ^task-([0-9]+)/ ]]; then
-            echo "Ветка '$BRANCH' не задача — отчёт не нужен"
-            exit 0
-          fi
-          TASK="${BASH_REMATCH[1]}"
-
-          if [ -z "${HUB_TOKEN}" ]; then
-            echo "::warning::HUB_CI_TOKEN не задан — отчёт в хаб не отправлен"
-            exit 0
-          fi
-
-          BODY=$(printf '{"head_sha":"%s","run_id":"%s","run_attempt":"%s","workflow_path":".github/workflows/android.yml","event":"%s","head_repository":"%s","run_conclusion":"%s","validation_status":"%s","reported_by":"github-actions"}' \
-            "$HEAD_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" "$GITHUB_REPOSITORY" "$CHECK_RESULT" "$CHECK_RESULT")
-
-          echo "Отправляю отчёт по задаче #$TASK, результат проверки: $CHECK_RESULT"
-          # Падение отправки не должно красить сам прогон тестов.
-          curl -sS --fail --max-time 30 -X POST \
-            "https://agenthai.ru/api/tasks/${TASK}/ci-run-report" \
-            -H "Authorization: Bearer ${HUB_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "$BODY" \
-            -w 'HTTP %{http_code}\n' \
-            || echo "::warning::Не удалось отправить отчёт в хаб"
+      - name: Загрузить результаты для отправителя
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hub-ci-results-${{ github.run_attempt }}
+          path: hub-ci-results/
+          if-no-files-found: ignore
+          retention-days: 7
