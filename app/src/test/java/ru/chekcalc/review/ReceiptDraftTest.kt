@@ -51,8 +51,54 @@ class ReceiptDraftTest {
         val warning = draft.residualWarning()!!
 
         assertFalse(draft.residualOk)
-        assertTrue("в предупреждении должна быть разница", warning.contains("50"))
-        assertTrue(warning.contains("Проверьте строки"))
+        // Проверяем все три числа: ожидание по формуле, итог чека и разницу.
+        assertTrue("ожидаемая сумма по формуле: $warning", warning.contains("ожидалось 300 ₽"))
+        assertTrue("итог чека: $warning", warning.contains("в чеке 350 ₽"))
+        assertTrue("разница: $warning", warning.contains("разница 50 ₽"))
+        assertTrue("итог больше — подсказка про пропущенную строку", warning.contains("пропущена"))
+    }
+
+    @Test
+    fun `итог меньше позиций подсказывает про скидку`() {
+        val draft = ReceiptDraft.fromReceipt(receipt(100.0, total = 80.0))
+
+        val warning = draft.residualWarning()!!
+
+        assertTrue("ожидалось 100 ₽: $warning", warning.contains("ожидалось 100 ₽"))
+        assertTrue("разница −20 ₽: $warning", warning.contains("разница −20 ₽"))
+        assertTrue("подсказка должна говорить про скидку или цену", warning.contains("скидку"))
+    }
+
+    @Test
+    fun `скидка учитывается в ожидаемой сумме`() {
+        // Позиции 100, скидка 50 → ожидаем 50, в чеке 80, разница +30.
+        val draft = ReceiptDraft(
+            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
+            discountKopecks = 50_00,
+            totalKopecks = 80_00,
+        )
+
+        val warning = draft.residualWarning()!!
+
+        assertTrue("скидка должна вычитаться: $warning", warning.contains("ожидалось 50 ₽"))
+        assertTrue("итог чека: $warning", warning.contains("в чеке 80 ₽"))
+        assertTrue("разница +30: $warning", warning.contains("разница 30 ₽"))
+    }
+
+    @Test
+    fun `обслуживание прибавляется к ожидаемой сумме`() {
+        // Позиции 100, обслуживание 10 → ожидаем 110, в чеке 130, разница +20.
+        val draft = ReceiptDraft(
+            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
+            serviceKopecks = 10_00,
+            totalKopecks = 130_00,
+        )
+
+        val warning = draft.residualWarning()!!
+
+        assertTrue("обслуживание должно прибавляться: $warning", warning.contains("ожидалось 110 ₽"))
+        assertTrue("итог чека: $warning", warning.contains("в чеке 130 ₽"))
+        assertTrue("разница +20: $warning", warning.contains("разница 20 ₽"))
     }
 
     @Test

@@ -81,13 +81,25 @@ data class ReceiptDraft(
 
     fun removeItem(id: Long): ReceiptDraft = copy(items = items.filterNot { it.id == id })
 
-    /** Текст предупреждения о расхождении; null, если всё сошлось. */
+    /**
+     * Текст предупреждения о расхождении; null, если всё сошлось.
+     *
+     * Подсказка зависит от знака разницы: если итог больше суммы позиций,
+     * дело скорее в пропущенной строке или обслуживании; если меньше —
+     * в скидке или неверно прочитанной цене.
+     */
     fun residualWarning(): String? {
         if (residualOk) return null
-        val residual = Money.format(residualKopecks)
-        return "Сумма позиций ${Money.format(itemsSumKopecks)} не сходится с итогом чека " +
-            "${Money.format(totalKopecks)}: разница $residual. Проверьте строки — возможно, " +
-            "позиция потерялась или цена распознана неверно."
+        // Сравниваем с тем, что должно быть по формуле: позиции − скидка + обслуживание.
+        val expected = itemsSumKopecks - discountKopecks + serviceKopecks
+        val reason = if (residualKopecks > 0) {
+            "в чеке больше — проверьте, не пропущена ли строка или обслуживание"
+        } else {
+            "в чеке меньше — проверьте скидку и цены строк"
+        }
+        return "По позициям ожидалось ${Money.format(expected)}, в чеке " +
+            "${Money.format(totalKopecks)}: разница ${Money.format(residualKopecks)}. " +
+            "Причина: $reason."
     }
 
     companion object {
