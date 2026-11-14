@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.serialization.json.Json
 import ru.chekcalc.api.RecognitionClient
 import ru.chekcalc.model.Receipt
@@ -33,6 +34,7 @@ import ru.chekcalc.ui.import.PhotoImportScreen
 import ru.chekcalc.ui.manual.ManualEntryScreen
 import ru.chekcalc.ui.manual.ManualReceipt
 import ru.chekcalc.ui.review.ReceiptDraft
+import ru.chekcalc.ui.review.ReviewPhotoViewModel
 import ru.chekcalc.ui.review.ReviewScreen
 import ru.chekcalc.ui.select.SelectionScreen
 import ru.chekcalc.ui.select.SelectionState
@@ -50,6 +52,9 @@ class MainActivity : ComponentActivity() {
                     SettingsRepository(EncryptedSecretStore(context.applicationContext))
                 }
                 val recognition = remember { RecognitionClient() }
+                // Фото чека живёт в памяти, пока идёт проверка: поворот экрана
+                // не должен его стирать, а на диск оно не попадает.
+                val reviewPhoto: ReviewPhotoViewModel = viewModel()
                 // rememberSaveable: поворот экрана или пересоздание Activity
                 // не должны выбрасывать человека с текущего экрана.
                 var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
@@ -88,6 +93,7 @@ class MainActivity : ComponentActivity() {
                             lastReceipt = lastReceipt,
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
+                                reviewPhoto.clear()
                                 manualJson = null
                                 screenName = Screen.MANUAL.name
                             },
@@ -107,13 +113,15 @@ class MainActivity : ComponentActivity() {
                                     recognition.recognize(bytes, settings)
                                 }
                             },
-                            onRecognized = { receipt ->
+                            onRecognized = { receipt, photoBytes ->
+                                reviewPhoto.set(photoBytes)
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                                 val draftValue = ReceiptDraft.fromReceipt(receipt)
                                 draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), draftValue)
                                 screenName = Screen.REVIEW.name
                             },
                             onManualEntry = {
+                                reviewPhoto.clear()
                                 manualJson = null
                                 screenName = Screen.MANUAL.name
                             },
@@ -127,7 +135,8 @@ class MainActivity : ComponentActivity() {
                             },
                             onNext = { entered ->
                                 // Ручной чек идёт тем же путём, что распознанный:
-                                // сначала receipt.v1, потом черновик проверки.
+                                // сначала receipt.v1, потом черновик проверки. Фото нет.
+                                reviewPhoto.clear()
                                 val receipt = ManualReceipt.toReceipt(entered)
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                                 val reviewDraft = ReceiptDraft.fromReceipt(receipt)
@@ -160,7 +169,11 @@ class MainActivity : ComponentActivity() {
                                         }
                                         screenName = Screen.SELECT.name
                                     },
-                                    onBack = { screenName = Screen.HOME.name },
+                                    onBack = {
+                                        reviewPhoto.clear()
+                                        screenName = Screen.HOME.name
+                                    },
+                                    photo = reviewPhoto.photo,
                                 )
                             }
                         }
@@ -179,7 +192,11 @@ class MainActivity : ComponentActivity() {
                                         )
                                     },
                                     // Экран итога появится в #2298.
-                                    onNext = { screenName = Screen.HOME.name },
+                                    onNext = {
+                                        // Сессия проверки закончена — фото больше не нужно.
+                                        reviewPhoto.clear()
+                                        screenName = Screen.HOME.name
+                                    },
                                     onBack = { screenName = Screen.REVIEW.name },
                                 )
                             }
