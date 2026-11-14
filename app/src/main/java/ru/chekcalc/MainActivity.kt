@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.serialization.json.Json
 import ru.chekcalc.api.RecognitionClient
 import ru.chekcalc.model.Receipt
@@ -35,11 +36,12 @@ import ru.chekcalc.ui.import.PhotoImportScreen
 import ru.chekcalc.ui.manual.ManualEntryScreen
 import ru.chekcalc.ui.manual.ManualReceipt
 import ru.chekcalc.ui.review.ReceiptDraft
+import ru.chekcalc.ui.review.ReviewPhotoViewModel
 import ru.chekcalc.ui.review.ReviewScreen
 import ru.chekcalc.ui.select.SelectionScreen
-import ru.chekcalc.ui.select.SelectionState
 import ru.chekcalc.storage.Payer
 import ru.chekcalc.storage.PayerStore
+import ru.chekcalc.ui.select.SelectionState
 import ru.chekcalc.ui.summary.ReceiptSummary
 import ru.chekcalc.ui.summary.SummaryScreen
 import ru.chekcalc.ui.settings.SettingsScreen
@@ -62,6 +64,9 @@ class MainActivity : ComponentActivity() {
                     SettingsRepository(EncryptedSecretStore(context.applicationContext))
                 }
                 val recognition = remember { RecognitionClient() }
+                // Фото чека живёт в памяти, пока идёт проверка: поворот экрана
+                // не должен его стирать, а на диск оно не попадает.
+                val reviewPhoto: ReviewPhotoViewModel = viewModel()
                 // rememberSaveable: поворот экрана или пересоздание Activity
                 // не должны выбрасывать человека с текущего экрана.
                 var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
@@ -80,15 +85,13 @@ class MainActivity : ComponentActivity() {
                 var selectionSourceJson by rememberSaveable { mutableStateOf<String?>(null) }
                 // Итог фиксируется на момент перехода: экран итога не пересчитывает.
                 var summaryJson by rememberSaveable { mutableStateOf<String?>(null) }
-                // Реквизиты платившего: вводятся один раз, живут только на устройстве.
-                val payerStore = remember { PayerStore(this@MainActivity) }
-                // Payer не Parcelable: без своего Saver rememberSaveable падает
-                // при первом же сохранении состояния.
-                var payer by rememberSaveable(stateSaver = PayerSaver) {
-                    mutableStateOf(payerStore.load())
-                }
                 val summary = summaryJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptSummary>(it) }.getOrNull()
+                }
+                // Реквизиты платившего: вводятся один раз, живут только на устройстве.
+                val payerStore = remember { PayerStore(this@MainActivity) }
+                var payer by rememberSaveable(stateSaver = PayerSaver) {
+                    mutableStateOf(payerStore.load())
                 }
                 val selection = selectionJson?.let {
                     runCatching { receiptJson.decodeFromString<SelectionState>(it) }.getOrNull()
@@ -112,6 +115,7 @@ class MainActivity : ComponentActivity() {
                             lastReceipt = lastReceipt,
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
+                                reviewPhoto.clear()
                                 manualJson = null
                                 screenName = Screen.MANUAL.name
                             },
@@ -131,13 +135,15 @@ class MainActivity : ComponentActivity() {
                                     recognition.recognize(bytes, settings)
                                 }
                             },
-                            onRecognized = { receipt ->
+                            onRecognized = { receipt, photoBytes ->
+                                reviewPhoto.set(photoBytes)
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                                 val draftValue = ReceiptDraft.fromReceipt(receipt)
                                 draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), draftValue)
                                 screenName = Screen.REVIEW.name
                             },
                             onManualEntry = {
+                                reviewPhoto.clear()
                                 manualJson = null
                                 screenName = Screen.MANUAL.name
                             },
@@ -151,7 +157,8 @@ class MainActivity : ComponentActivity() {
                             },
                             onNext = { entered ->
                                 // Ручной чек идёт тем же путём, что распознанный:
-                                // сначала receipt.v1, потом черновик проверки.
+                                // сначала receipt.v1, потом черновик проверки. Фото нет.
+                                reviewPhoto.clear()
                                 val receipt = ManualReceipt.toReceipt(entered)
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                                 val reviewDraft = ReceiptDraft.fromReceipt(receipt)
@@ -184,7 +191,11 @@ class MainActivity : ComponentActivity() {
                                         }
                                         screenName = Screen.SELECT.name
                                     },
-                                    onBack = { screenName = Screen.HOME.name },
+                                    onBack = {
+                                        reviewPhoto.clear()
+                                        screenName = Screen.HOME.name
+                                    },
+                                    photo = reviewPhoto.photo,
                                 )
                             }
                         }
@@ -202,13 +213,11 @@ class MainActivity : ComponentActivity() {
                                             updated,
                                         )
                                     },
+                                    // Экран итога появится в #2298.
                                     onNext = {
-                                        val built = ReceiptSummary.from(current)
-                                        summaryJson = receiptJson.encodeToString(
-                                            ReceiptSummary.serializer(),
-                                            built,
-                                        )
-                                        screenName = Screen.SUMMARY.name
+                                        // Сессия проверки закончена — фото больше не нужно.
+                                        reviewPhoto.clear()
+                                        screenName = Screen.HOME.name
                                     },
                                     onBack = { screenName = Screen.REVIEW.name },
                                 )

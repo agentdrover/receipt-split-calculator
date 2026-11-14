@@ -58,7 +58,8 @@ import java.io.File
 @Composable
 fun PhotoImportScreen(
     recognize: suspend (ByteArray) -> RecognitionResult,
-    onRecognized: (Receipt) -> Unit = {},
+    // Вместе с чеком отдаём сжатый JPEG: экран проверки показывает фото рядом.
+    onRecognized: (Receipt, ByteArray) -> Unit = { _, _ -> },
     onManualEntry: () -> Unit = {},
     onBack: () -> Unit = {},
 ) {
@@ -110,9 +111,19 @@ fun PhotoImportScreen(
         sending = true
         message = null
         scope.launch {
+            // Сжатый JPEG нужен и провайдеру, и экрану проверки: человек
+            // сверяет распознанное с фото. Держим байты в памяти, на диск не пишем.
+            val prepared = withContext(Dispatchers.IO) { runCatching { compressor.compress(uri) } }
+            val photo = prepared.getOrNull()
+            if (photo == null) {
+                sending = false
+                message = prepared.exceptionOrNull()?.message ?: "не удалось подготовить фото"
+                canRetry = true
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
                 try {
-                    recognize(compressor.compress(uri))
+                    recognize(photo)
                 } catch (failure: Exception) {
                     RecognitionResult.Failure(
                         ru.chekcalc.api.FailureKind.INVALID_RESPONSE,
@@ -125,7 +136,7 @@ fun PhotoImportScreen(
                 is RecognitionResult.Success -> {
                     deletePickedCapture()
                     canRetry = false
-                    onRecognized(result.receipt)
+                    onRecognized(result.receipt, photo)
                 }
                 is RecognitionResult.Failure -> {
                     message = result.message
