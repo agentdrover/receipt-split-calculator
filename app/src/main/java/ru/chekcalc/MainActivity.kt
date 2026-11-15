@@ -128,6 +128,7 @@ class MainActivity : ComponentActivity() {
                 // Результат глубокого разбора, ждущий подтверждения: пока он шёл,
                 // человек мог править черновик руками.
                 var pendingDeepJson by remember { mutableStateOf<String?>(null) }
+                var reviewEditing by remember { mutableStateOf(false) }
                 var manualJson by rememberSaveable { mutableStateOf<String?>(null) }
                 val manualDraft = manualJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
@@ -266,6 +267,7 @@ class MainActivity : ComponentActivity() {
                                     photo = reviewPhoto.photo,
                                     deepBusy = deepBusy,
                                     deepSummary = deepSummary,
+                                    onEditingChange = { reviewEditing = it },
                                     onDeepRecognize = {
                                         val bytes = reviewPhoto.photo
                                         if (bytes != null && !deepBusy) {
@@ -298,7 +300,11 @@ class MainActivity : ComponentActivity() {
                                                             ReceiptDraft.serializer(),
                                                             fresh,
                                                         )
-                                                        if (draftJson != startedJson) {
+                                                        if (reviewEditing) {
+                                                            // Открыт редактор: замена сдвинула бы id строк.
+                                                            deepSummary =
+                                                                "Результат готов, но открыт редактор — закройте и нажмите ещё раз"
+                                                        } else if (draftJson != startedJson) {
                                                             // Правки во время запроса не стираем молча.
                                                             pendingDeepJson = freshJson
                                                             deepSummary = "Результат готов — подтвердите замену правок"

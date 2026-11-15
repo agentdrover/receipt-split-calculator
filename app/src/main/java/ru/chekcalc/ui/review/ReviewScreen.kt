@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -87,16 +88,23 @@ fun ReviewScreen(
     onDeepRecognize: (() -> Unit)? = null,
     deepBusy: Boolean = false,
     deepSummary: String? = null,
+    // Наружу нужно знать, открыт ли редактор: во время правки позиции
+    // замена черновика сдвинула бы идентификаторы строк.
+    onEditingChange: (Boolean) -> Unit = {},
 ) {
     // Системный Back и жест возвращают на главный экран, а не закрывают приложение.
     BackHandler { onBack() }
 
     // Лист правки переживает поворот: несохранённый ввод не теряется.
     var itemSheetOpen by rememberSaveable { mutableStateOf(false) }
+    var totalsSheetOpenForEdit by rememberSaveable { mutableStateOf(false) }
     var editingItem by rememberSaveable(stateSaver = ItemEditStateSaver) {
         mutableStateOf(ItemEditState.new())
     }
     var totalsSheetOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(itemSheetOpen, totalsSheetOpen) {
+        onEditingChange(itemSheetOpen || totalsSheetOpen)
+    }
     var editingTotals by rememberSaveable(stateSaver = TotalsEditStateSaver) {
         mutableStateOf(TotalsEditState.of(draft))
     }
