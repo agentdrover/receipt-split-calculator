@@ -13,6 +13,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import ru.chekcalc.model.Receipt
+import ru.chekcalc.model.ReceiptItem
+import ru.chekcalc.model.ServiceCharge
 import ru.chekcalc.storage.ProviderSettings
 import java.io.ByteArrayInputStream
 import java.util.concurrent.TimeUnit
@@ -228,13 +231,13 @@ class RecognitionClientTest {
 
     @Test
     fun `размышление отключаем только у официального DeepSeek`() {
-        assertTrue(client.disablesThinking("https://api.deepseek.com"))
-        assertTrue(client.disablesThinking("https://api.deepseek.com/v1"))
-        assertTrue(client.disablesThinking("https://API.DEEPSEEK.COM"))
-        assertTrue(client.disablesThinking("https://api.deepseek.com."))
-        assertFalse(client.disablesThinking("https://openrouter.ai/api/v1"))
-        assertFalse(client.disablesThinking("https://api.deepseek.com.evil.example"))
-        assertFalse(client.disablesThinking("не url"))
+        assertTrue(disablesThinking("https://api.deepseek.com"))
+        assertTrue(disablesThinking("https://api.deepseek.com/v1"))
+        assertTrue(disablesThinking("https://API.DEEPSEEK.COM"))
+        assertTrue(disablesThinking("https://api.deepseek.com."))
+        assertFalse(disablesThinking("https://openrouter.ai/api/v1"))
+        assertFalse(disablesThinking("https://api.deepseek.com.evil.example"))
+        assertFalse(disablesThinking("не url"))
     }
 
     @Test
@@ -246,5 +249,188 @@ class RecognitionClientTest {
 
         val without = client.buildJsonObject("deepseek-flash", "data:image/jpeg;base64,AA", disableThinking = false)
         assertFalse(without.contains("thinking"))
+    }
+
+    @Test(timeout = 15_000)
+    fun `два прогона объединяют позиции без дублей`() = runBlocking {
+        val twoShots = RecognitionClient(doubleSample = { true })
+        try {
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":200.0}""")
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0},{"name":"Чай","qty":1,"amount":100.0}],"total":200.0}""")
+
+            val result = twoShots.recognize(image, settings)
+
+            val receipt = (result as RecognitionResult.Success).receipt
+            assertEquals(2, receipt.items.size)
+            assertEquals(setOf("Кофе", "Чай"), receipt.items.map { it.name }.toSet())
+            assertEquals(2, server.requestCount)
+        } finally {
+            twoShots.close()
+        }
+    }
+
+    @Test(timeout = 15_000)
+    fun `расхождение итогов повторяется с размышлением`() = runBlocking {
+        val twoShots = RecognitionClient(doubleSample = { true })
+        try {
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":100.0}""")
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":300.0}""")
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0},{"name":"Торт","qty":1,"amount":200.0}],"total":300.0}""")
+
+            val result = twoShots.recognize(image, settings)
+
+            val receipt = (result as RecognitionResult.Success).receipt
+            assertEquals(300.0, receipt.total, 0.001)
+            assertEquals(2, receipt.items.size)
+            assertEquals(3, server.requestCount)
+            server.takeRequest()
+            server.takeRequest()
+            val retryBody = server.takeRequest().body.readUtf8()
+            assertFalse("повтор должен быть без отключённого размышления", retryBody.contains("\"disabled\""))
+        } finally {
+            twoShots.close()
+        }
+    }
+
+
+
+
+    @Test
+    fun `допуск по итогам не больше процента`() {
+        assertFalse(client.totalsDiffer(1000.0, 1005.0))
+        assertTrue(client.totalsDiffer(10.0, 10.9))
+    }
+
+    @Test(timeout = 15_000)
+    fun `невалидный повтор с размышлением не запускает новый круг`() = runBlocking {
+        val twoShots = RecognitionClient(doubleSample = { true })
+        try {
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":100.0}""")
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":300.0}""")
+            answer("это не json")
+
+            val result = twoShots.recognize(image, settings)
+
+            assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
+            assertEquals(3, server.requestCount)
+        } finally {
+            twoShots.close()
+        }
+    }
+
+
+    @Test
+    fun `обслуживание учитывается при проверке превышения`() {
+        val first = Receipt(
+            currency = "RUB",
+            items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
+            serviceCharge = ServiceCharge(present = true, amount = 100.0),
+            total = 1100.0,
+        )
+        val second = first.copy(
+            items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0), ReceiptItem(name = "Торт", amount = 100.0)),
+        )
+
+        val picked = client.pickReceipt(first, second)
+
+        assertEquals(2, picked.items.size)
+    }
+
+    @Test
+    fun `копеечный итог не прощает двойного счёта`() {
+        val first = Receipt(
+            currency = "RUB",
+            items = listOf(ReceiptItem(name = "Кофе", qty = 2.0, amount = 1.0)),
+            total = 1.0,
+        )
+        val second = first.copy(
+            items = listOf(ReceiptItem(name = "Кофе", amount = 0.5), ReceiptItem(name = "Кофе", amount = 0.5)),
+        )
+
+        val picked = client.pickReceipt(first, second)
+
+        // Двойного счёта нет: берём один из согласованных ответов.
+        assertEquals(1.0, picked.items.sumOf { it.amount }, 0.001)
+    }
+
+    @Test
+    fun `согласованный ответ с обслуживанием важнее слияния`() {
+        val withoutService = Receipt(
+            currency = "RUB",
+            items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
+            total = 1100.0,
+        )
+        val withService = Receipt(
+            currency = "RUB",
+            items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
+            serviceCharge = ServiceCharge(present = true, amount = 100.0),
+            total = 1100.0,
+        )
+
+        val picked = client.pickReceipt(withoutService, withService)
+
+        assertTrue(picked.serviceCharge.present)
+        assertEquals(100.0, picked.serviceCharge.amount, 0.001)
+    }
+
+
+
+
+
+    @Test(timeout = 15_000)
+    fun `отказ провайдера не повторяется даже при втором невалидном ответе`() = runBlocking {
+        val twoShots = RecognitionClient(doubleSample = { true })
+        try {
+            answer("это не json")
+            answer("{}", code = 401)
+
+            val result = twoShots.recognize(image, settings)
+
+            assertTrue(result is RecognitionResult.Failure)
+            assertEquals(2, server.requestCount)
+        } finally {
+            twoShots.close()
+        }
+    }
+
+
+
+    @Test
+    fun `из двух согласованных ответов берём более подробный`() {
+        val first = Receipt(
+            currency = "RUB",
+            items = listOf(ReceiptItem(name = "Кофе", qty = 2.0, amount = 200.0)),
+            total = 200.0,
+        )
+        val second = first.copy(
+            items = listOf(
+                ReceiptItem(name = "Кофе", amount = 100.0),
+                ReceiptItem(name = "Кофе", amount = 100.0),
+            ),
+        )
+
+        val picked = client.pickReceipt(first, second)
+
+        assertEquals(2, picked.items.size)
+        assertEquals(200.0, picked.items.sumOf { it.amount }, 0.001)
+    }
+
+    @Test
+    fun `согласованный ответ важнее подробного несогласованного`() {
+        val broken = Receipt(
+            currency = "RUB",
+            items = listOf(
+                ReceiptItem(name = "Кофе", amount = 100.0),
+                ReceiptItem(name = "Торт", amount = 100.0),
+                ReceiptItem(name = "Чай", amount = 100.0),
+            ),
+            total = 500.0,
+        )
+        val good = broken.copy(
+            items = listOf(ReceiptItem(name = "Кофе", amount = 200.0)),
+            total = 200.0,
+        )
+
+        assertEquals(good, client.pickReceipt(broken, good))
     }
 }

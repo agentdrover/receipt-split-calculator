@@ -1,5 +1,7 @@
 package ru.chekcalc.api
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -13,8 +15,12 @@ import okhttp3.Request
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.RequestBody.Companion.toRequestBody
+import kotlin.math.abs
 import okhttp3.Response
+import ru.chekcalc.model.Discount
 import ru.chekcalc.model.Receipt
+import ru.chekcalc.model.ReceiptItem
+import ru.chekcalc.model.ServiceCharge
 import ru.chekcalc.storage.ProviderSettings
 import java.io.IOException
 import java.util.Base64
@@ -56,6 +62,8 @@ class RecognitionClient(
         .build(),
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val attempts: Int = 2,
+    /** Два независимых прогона на DeepSeek: ошибки модели взаимно закрываются. */
+    private val doubleSample: (String) -> Boolean = ::disablesThinking,
 ) {
 
     /**
@@ -73,19 +81,70 @@ class RecognitionClient(
         require(settings.model.isNotBlank()) { "не задана модель" }
 
         var lastFailure: RecognitionResult.Failure? = null
+        var thinkingAttempted = false
         for (attempt in 1..attempts) {
-            when (val result = call(image, settings)) {
+            val exchange = exchange(image, settings, allowThinking = !thinkingAttempted)
+            thinkingAttempted = thinkingAttempted || exchange.thinkingAttempted
+            when (val result = exchange.result) {
                 is RecognitionResult.Success -> return result.copy(attempts = attempt)
                 is RecognitionResult.Failure -> {
                     lastFailure = result
                     // Повторяем только невалидный ответ модели: сеть, таймаут и
-                    // пустой чек повтором не лечатся.
-                    if (result.kind != FailureKind.INVALID_RESPONSE) return result
+                    // пустой чек повтором не лечатся. Если размышление уже
+                    // включали — второй раз не платим.
+                    if (result.kind != FailureKind.INVALID_RESPONSE || thinkingAttempted) return result
                 }
             }
         }
         return lastFailure ?: RecognitionResult.Failure(FailureKind.INVALID_RESPONSE, "не удалось распознать")
     }
+
+    /**
+     * Прогон распознавания: на DeepSeek — два параллельных запроса с
+     * объединением позиций, у остальных провайдеров — один.
+     *
+     * Если итоги двух ответов расходятся больше чем на 1 %, ошибка масштаба
+     * не случайна: повторяем один запрос с включённым размышлением.
+     */
+    private suspend fun exchange(
+        image: ByteArray,
+        settings: ProviderSettings,
+        allowThinking: Boolean,
+    ): Exchange {
+        if (!doubleSample(settings.baseUrl)) {
+            return Exchange(
+                call(image, settings, disableThinking = disablesThinking(settings.baseUrl)),
+                thinkingAttempted = false,
+            )
+        }
+        val (first, second) = coroutineScope {
+            val a = async { call(image, settings, disableThinking = true) }
+            val b = async { call(image, settings, disableThinking = true) }
+            a.await() to b.await()
+        }
+        val ok = listOf(first, second).filterIsInstance<RecognitionResult.Success>()
+        if (ok.isEmpty()) {
+            // Если один ответ — отказ провайдера (ключ, лимит), повтор не лечит:
+            // возвращаем именно его, иначе внешний цикл сделает ещё пару запросов.
+            val failures = listOf(first, second).filterIsInstance<RecognitionResult.Failure>()
+            val decisive = failures.firstOrNull { it.kind != FailureKind.INVALID_RESPONSE }
+            return Exchange(decisive ?: first, thinkingAttempted = false)
+        }
+        if (ok.size == 1) return Exchange(ok.single(), thinkingAttempted = false)
+        val a = ok[0].receipt
+        val b = ok[1].receipt
+        if (totalsDiffer(a.total, b.total) && allowThinking) {
+            // Размышление включаем только на подозрительном чеке: это дороже,
+            // но именно там модель путает масштаб сумм.
+            return Exchange(call(image, settings, disableThinking = false), thinkingAttempted = true)
+        }
+        return Exchange(
+            RecognitionResult.Success(pickReceipt(a, b), attempts = 1),
+            thinkingAttempted = false,
+        )
+    }
+
+    private class Exchange(val result: RecognitionResult, val thinkingAttempted: Boolean)
 
     /**
      * Один обмен с провайдером.
@@ -94,12 +153,16 @@ class RecognitionClient(
      * запроса, включая чтение тела: `invokeOnCancellation` живёт до тех пор,
      * пока продолжение не завершено.
      */
-    private suspend fun call(image: ByteArray, settings: ProviderSettings): RecognitionResult {
+    private suspend fun call(
+        image: ByteArray,
+        settings: ProviderSettings,
+        disableThinking: Boolean,
+    ): RecognitionResult {
         val request = Request.Builder()
             .url(settings.baseUrl.trimEnd('/') + "/chat/completions")
             .header("Authorization", "Bearer ${settings.apiKey}")
             .header("Content-Type", "application/json")
-            .post(buildBody(image, settings).toRequestBody(JSON_MEDIA))
+            .post(buildBody(image, settings, disableThinking).toRequestBody(JSON_MEDIA))
             .build()
 
         return suspendCancellableCoroutine { continuation ->
@@ -207,12 +270,12 @@ class RecognitionClient(
     private fun invalid(message: String) =
         RecognitionResult.Failure(FailureKind.INVALID_RESPONSE, message)
 
-    private fun buildBody(image: ByteArray, settings: ProviderSettings): String {
+    private fun buildBody(image: ByteArray, settings: ProviderSettings, disableThinking: Boolean): String {
         val encoded = Base64.getEncoder().encodeToString(image)
         return buildJsonObject(
             model = settings.model,
             dataUrl = "data:image/jpeg;base64,$encoded",
-            disableThinking = disablesThinking(settings.baseUrl),
+            disableThinking = disableThinking,
         )
     }
 
@@ -230,13 +293,79 @@ class RecognitionClient(
         """.trimIndent()
     }
 
-    /** Отключаем размышление только у официального DeepSeek: чужие шлюзы могут не знать поле. */
-    internal fun disablesThinking(baseUrl: String): Boolean =
-        runCatching {
-            // Хвостовая точка в FQDN — тот же хост, но строка другая.
-            java.net.URI(baseUrl).host?.trimEnd('.')
-                ?.equals("api.deepseek.com", ignoreCase = true) == true
-        }.getOrDefault(false)
+    /** Допуск: 1 % от большей суммы, но не меньше копейки. */
+    internal fun tolerance(a: Double, b: Double): Double =
+        maxOf(0.01, 0.01 * maxOf(abs(a), abs(b)))
+
+    /** Итоги расходятся больше чем на 1 %: вероятна ошибка масштаба. */
+    internal fun totalsDiffer(a: Double, b: Double): Boolean =
+        abs(a - b) > tolerance(a, b)
+
+    /**
+     * Выбор лучшего из двух ответов.
+     *
+     * Объединять позиции нельзя: одна и та же строка может быть сгруппирована
+     * по-разному («капучино 600» против двух по 300), и сумма объединения
+     * случайно сходится с итогом, пряча пропуск. Поэтому берём ответ, который
+     * сходится с итогом, а при равенстве — более подробный.
+     */
+    internal fun pickReceipt(first: Receipt, second: Receipt): Receipt {
+        val firstOk = matchesTotal(first)
+        val secondOk = matchesTotal(second)
+        return when {
+            firstOk && secondOk -> if (second.items.size > first.items.size) second else first
+            firstOk -> first
+            secondOk -> second
+            // Ни один не сходится: более подробный обычно ближе к правде,
+            // а расхождение с итогом экран покажет как остаток.
+            second.items.size > first.items.size -> second
+            else -> first
+        }
+    }
+
+    /** Сумма позиций сходится с итогом чека с учётом скидки и обслуживания. */
+    internal fun matchesTotal(receipt: Receipt): Boolean {
+        val expected = expectedTotal(receipt)
+        return abs(expected - receipt.total) <= tolerance(expected, receipt.total)
+    }
+
+    /** Ожидаемый итог по позициям: сумма − скидка + обслуживание. */
+    private fun expectedTotal(receipt: Receipt): Double {
+        val discount = if (receipt.discount.present) receipt.discount.amount else 0.0
+        val service = if (receipt.serviceCharge.present) receipt.serviceCharge.amount else 0.0
+        return receipt.items.sumOf { it.amount } - discount + service
+    }
+
+    /** Одна и та же позиция: похожее название и сумма в пределах 1 %. */
+
+    /** Одна и та же позиция: похожее название и сумма в пределах 1 %. */
+    internal fun sameItem(a: ReceiptItem, b: ReceiptItem): Boolean =
+        similarName(a.name, b.name) >= 0.8 && abs(a.amount - b.amount) <= tolerance(a.amount, b.amount)
+
+    /** Похожесть названий 0..1 по расстоянию Левенштейна. */
+    internal fun similarName(a: String, b: String): Double {
+        val x = a.lowercase().trim().replace(WHITESPACE, " ")
+        val y = b.lowercase().trim().replace(WHITESPACE, " ")
+        if (x.isEmpty() || y.isEmpty()) return 0.0
+        return 1.0 - levenshtein(x, y).toDouble() / maxOf(x.length, y.length)
+    }
+
+    private fun levenshtein(a: String, b: String): Int {
+        var previous = IntArray(b.length + 1) { it }
+        var current = IntArray(b.length + 1)
+        for (i in 1..a.length) {
+            current[0] = i
+            for (j in 1..b.length) {
+                val substitution = previous[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1
+                current[j] = minOf(current[j - 1] + 1, previous[j] + 1, substitution)
+            }
+            val swap = previous
+            previous = current
+            current = swap
+        }
+        return previous[b.length]
+    }
+
 
     private fun stripCodeFence(content: String): String {
         val trimmed = content.trim()
@@ -254,6 +383,7 @@ class RecognitionClient(
             url.startsWith("http://127.0.0.1")
 
     private companion object {
+        val WHITESPACE = Regex("\\s+")
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
         const val MAX_RESPONSE_BYTES = ResponseReader.MAX_RESPONSE_BYTES
         const val MAX_RUBLES = 1_000_000_000.0
@@ -282,3 +412,11 @@ class RecognitionClient(
         """.trimIndent()
     }
 }
+
+/** Отключаем размышление только у официального DeepSeek: чужие шлюзы могут не знать поле. */
+internal fun disablesThinking(baseUrl: String): Boolean =
+    runCatching {
+        // Хвостовая точка в FQDN — тот же хост, но строка другая.
+        java.net.URI(baseUrl).host?.trimEnd('.')
+            ?.equals("api.deepseek.com", ignoreCase = true) == true
+    }.getOrDefault(false)
