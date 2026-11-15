@@ -119,7 +119,9 @@ class MainActivity : ComponentActivity() {
                 // Форма ручного ввода тоже переживает поворот экрана.
                 val scope = rememberCoroutineScope()
                 // Глубокий разбор: состояние кнопки на экране проверки.
-                var deepBusy by rememberSaveable { mutableStateOf(false) }
+                // remember, а не rememberSaveable: поворот отменяет запрос,
+                // и сохранённый true оставил бы кнопку заблокированной навсегда.
+                var deepBusy by remember { mutableStateOf(false) }
                 var deepSummary by rememberSaveable { mutableStateOf<String?>(null) }
                 var manualJson by rememberSaveable { mutableStateOf<String?>(null) }
                 val manualDraft = manualJson?.let {
@@ -241,6 +243,14 @@ class MainActivity : ComponentActivity() {
                                                         settings = settings,
                                                         forceDeepThinking = true,
                                                     )
+                                                }
+                                                // Пока шёл запрос, могли уйти назад и открыть
+                                                // другой чек: чужой ответ не применяем.
+                                                if (reviewPhoto.photo !== bytes ||
+                                                    screenName != Screen.REVIEW.name
+                                                ) {
+                                                    deepBusy = false
+                                                    return@launch
                                                 }
                                                 deepBusy = false
                                                 when (result) {
