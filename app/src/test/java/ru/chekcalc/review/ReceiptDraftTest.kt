@@ -270,6 +270,52 @@ class ReceiptDraftTest {
         assertEquals("Кофе с молоком", renamed.items.first().name)
         assertEquals(draft.itemsSumKopecks, renamed.itemsSumKopecks)
     }
+
+    @Test
+    fun `скидка больше позиций блокирует дальше`() {
+        val draft = ReceiptDraft(
+            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_000)),
+            totalKopecks = 100_000,
+            discountKopecks = 120_000,
+        )
+
+        assertTrue(!draft.canProceed)
+        assertEquals("Скидка больше суммы позиций — исправьте", draft.blockingError)
+    }
+
+    @Test
+    fun `пустой чек и обслуживание без позиций блокируют дальше`() {
+        assertTrue(!ReceiptDraft().canProceed)
+        assertTrue(!ReceiptDraft(serviceKopecks = 10_000).canProceed)
+    }
+
+    @Test
+    fun `расхождение OCR не блокирует дальше`() {
+        val draft = ReceiptDraft(
+            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_000)),
+            totalKopecks = 150_000,
+        )
+
+        assertTrue(draft.canProceed)
+        assertTrue(draft.residualWarning() != null)
+        assertTrue(draft.blockingError == null)
+    }
+
+    @Test
+    fun `сумма без present не превращается в скидку`() {
+        val receipt = ru.chekcalc.model.Receipt(
+            currency = "RUB",
+            items = listOf(ru.chekcalc.model.ReceiptItem(name = "Кофе", amount = 100.0)),
+            total = 110.0,
+            discount = ru.chekcalc.model.Discount(present = false, amount = 50.0),
+            serviceCharge = ru.chekcalc.model.ServiceCharge(present = false, amount = 60.0),
+        )
+
+        val draft = ReceiptDraft.fromReceipt(receipt)
+
+        assertEquals(0, draft.discountKopecks)
+        assertEquals(0, draft.serviceKopecks)
+    }
 }
 
 // Сводка после глубокого разбора: человек видит выгоду одной строкой.

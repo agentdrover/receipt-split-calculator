@@ -160,4 +160,39 @@ class SelectionStateTest {
         assertEquals(75_000L, selected.items.sumOf { it.amountKopecks })
         assertEquals(0L, selected.totalKopecks)
     }
+
+    @Test
+    fun `восстановленная скидка больше позиций не роняет расчёт`() {
+        val state = SelectionState(
+            items = listOf(
+                ru.chekcalc.ui.select.SelectableItem(
+                    id = 1,
+                    name = "Кофе",
+                    amountKopecks = 100_000,
+                    choice = Choice.Whole,
+                ),
+            ),
+            discountKopecks = 120_000,
+        )
+
+        // Скидка подрезается до 100 %: ядро не бросает, итог не отрицательный.
+        assertEquals(0, state.totalKopecks)
+    }
+
+    @Test
+    fun `восстановленное обслуживание без позиций не роняет экран`() {
+        val state = SelectionState(
+            items = listOf(
+                ru.chekcalc.ui.select.SelectableItem(
+                    id = 1,
+                    name = "Нулевая строка",
+                    amountKopecks = 0,
+                    choice = Choice.Whole,
+                ),
+            ),
+            serviceKopecks = 10_000,
+        )
+
+        assertEquals(0, state.totalKopecks)
+    }
 }

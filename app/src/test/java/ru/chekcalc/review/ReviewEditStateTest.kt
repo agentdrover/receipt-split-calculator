@@ -93,4 +93,59 @@ class ReviewEditStateTest {
         assertFalse(state.valid)
         assertEquals(base, state.apply(base))
     }
+
+    @Test
+    fun `скидка больше суммы позиций делает лист невалидным`() {
+        val state = TotalsEditState(
+            totalText = "1000",
+            discountText = "1200",
+            serviceText = "0",
+            itemsSumKopecks = 100_000,
+        )
+
+        assertTrue(!state.valid)
+        assertTrue(state.discountTooBig)
+    }
+
+    @Test
+    fun `скидка ровно 100 процентов валидна`() {
+        val state = TotalsEditState(
+            totalText = "0",
+            discountText = "1000",
+            serviceText = "0",
+            itemsSumKopecks = 100_000,
+        )
+
+        assertTrue(state.valid)
+        assertTrue(!state.discountTooBig)
+    }
+
+    @Test
+    fun `невалидная скидка не меняет черновик`() {
+        val draft = ReceiptDraft(
+            items = listOf(DraftItem(1, "Кофе", 1.0, 100_000)),
+            totalKopecks = 100_000,
+        )
+        val state = TotalsEditState(
+            totalText = "1000",
+            discountText = "1200",
+            serviceText = "0",
+            itemsSumKopecks = 100_000,
+        )
+
+        assertEquals(draft, state.apply(draft))
+    }
+
+    @Test
+    fun `старое состояние без суммы позиций не блокирует скидку`() {
+        val state = TotalsEditState(
+            totalText = "1000",
+            discountText = "200",
+            serviceText = "0",
+            itemsSumKopecks = null,
+        )
+
+        assertTrue(state.valid)
+        assertTrue(!state.discountTooBig)
+    }
 }
