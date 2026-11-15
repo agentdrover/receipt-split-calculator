@@ -15,6 +15,23 @@ import ru.chekcalc.storage.HistoryEntry
 import ru.chekcalc.storage.HistoryStore
 import java.io.File
 
+/** Какая операция истории не удалась: от этого зависит текст для человека. */
+enum class HistoryFailure { SAVE, DELETE, CLEAR }
+
+/**
+ * Правило флага сбоя: неудача ставит свой вид, успех гасит только свой.
+ * Иначе успешное удаление прятало бы предупреждение о несохранённом чеке.
+ */
+internal fun nextFailure(
+    current: HistoryFailure?,
+    kind: HistoryFailure?,
+    succeeded: Boolean,
+): HistoryFailure? = when {
+    !succeeded -> kind ?: current
+    kind != null && current == kind -> null
+    else -> current
+}
+
 /**
  * История чеков, которая переживает поворот экрана.
  *
@@ -32,37 +49,33 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     var entries by mutableStateOf<List<HistoryEntry>>(emptyList())
         private set
 
-    /** Сбой записи: показываем его, а не делаем вид, что чек сохранён. */
-    var failure by mutableStateOf(false)
+    /** Сбой операции истории: показываем его, а не делаем вид, что всё прошло. */
+    var failure by mutableStateOf<HistoryFailure?>(null)
         private set
 
     init {
-        viewModelScope.launch { perform { store.list() } }
+        viewModelScope.launch { perform(null) { store.list() } }
     }
 
     fun save(entry: HistoryEntry) {
-        viewModelScope.launch { perform { store.save(entry) } }
+        viewModelScope.launch { perform(HistoryFailure.SAVE) { store.save(entry) } }
     }
 
     fun delete(id: String) {
-        viewModelScope.launch { perform { store.delete(id) } }
+        viewModelScope.launch { perform(HistoryFailure.DELETE) { store.delete(id) } }
     }
 
     fun clear() {
-        viewModelScope.launch { perform { store.clear() } }
+        viewModelScope.launch { perform(HistoryFailure.CLEAR) { store.clear() } }
     }
 
-    private suspend fun perform(operation: () -> List<HistoryEntry>) {
+    private suspend fun perform(kind: HistoryFailure?, operation: () -> List<HistoryEntry>) {
         mutex.withLock {
             val updated = withContext(Dispatchers.IO) {
                 runCatching(operation).getOrNull()
             }
-            if (updated == null) {
-                failure = true
-            } else {
-                entries = updated
-                failure = false
-            }
+            failure = nextFailure(failure, kind, succeeded = updated != null)
+            updated?.let { entries = it }
         }
     }
 }

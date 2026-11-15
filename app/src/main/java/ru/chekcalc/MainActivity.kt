@@ -35,6 +35,7 @@ import ru.chekcalc.storage.HistoryEntry
 import ru.chekcalc.storage.SettingsRepository
 import ru.chekcalc.ui.ChekCalcTheme
 import ru.chekcalc.ui.history.HistoryDetailScreen
+import ru.chekcalc.ui.history.HistoryFailure
 import ru.chekcalc.ui.history.HistoryScreen
 import ru.chekcalc.ui.history.HistoryViewModel
 import ru.chekcalc.ui.import.PhotoImportScreen
@@ -126,7 +127,7 @@ class MainActivity : ComponentActivity() {
                     when (screen) {
                         Screen.HOME -> HomeScreen(
                             lastReceipt = lastReceipt,
-                            historyFailure = historyModel.failure,
+                            historyFailure = historyModel.failure == HistoryFailure.SAVE,
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
                                 reviewPhoto.clear()
@@ -288,6 +289,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 screenName = Screen.HISTORY_DETAIL.name
                             },
+                            failure = historyModel.failure,
                             onDelete = { entry -> historyModel.delete(entry.id) },
                             onClear = { historyModel.clear() },
                             onBack = { screenName = Screen.HOME.name },

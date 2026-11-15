@@ -44,6 +44,7 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(
     entries: List<HistoryEntry>,
+    failure: HistoryFailure?,
     onOpen: (HistoryEntry) -> Unit,
     onDelete: (HistoryEntry) -> Unit,
     onClear: () -> Unit,
@@ -57,6 +58,25 @@ fun HistoryScreen(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            failure?.takeIf { it != HistoryFailure.SAVE }?.let { kind ->
+                item(key = "failure") {
+                    Text(
+                        text = when (kind) {
+                            HistoryFailure.DELETE -> "Не удалось удалить чек. Попробуйте ещё раз."
+                            HistoryFailure.CLEAR -> "Не удалось очистить историю. Попробуйте ещё раз."
+                            HistoryFailure.SAVE -> ""
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.errorContainer)
+                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                    )
+                }
+            }
+
             item(key = "header") {
                 Column {
                     TextButton(
