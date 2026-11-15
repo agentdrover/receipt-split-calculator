@@ -143,6 +143,21 @@ fun HomeScreen(
     }
 }
 
+/** «3 позиции», «21 позиция», «11 позиций» — русское склонение по числу. */
+internal fun positionsLabel(count: Int): String = "$count " + when {
+    count % 10 == 1 && count % 100 != 11 -> "позиция"
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "позиции"
+    else -> "позиций"
+}
+
+/** Подпись строки истории: «пока пусто», «1 сохранённый чек», «2 сохранённых чека». */
+internal fun historyLabel(count: Int): String = when {
+    count <= 0 -> "пока пусто"
+    count % 10 == 1 && count % 100 != 11 -> "$count сохранённый чек"
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "$count сохранённых чека"
+    else -> "$count сохранённых чеков"
+}
+
 @Composable
 private fun HeroCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val palette = LocalChekPalette.current
@@ -192,11 +207,6 @@ private fun HeroCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
 private fun LastReceiptRow(receipt: Receipt, modifier: Modifier = Modifier) {
     val palette = LocalChekPalette.current
     val items = receipt.items.size
-    val plural = when {
-        items % 10 == 1 && items % 100 != 11 -> "позиция"
-        items % 10 in 2..4 && items % 100 !in 12..14 -> "позиции"
-        else -> "позиций"
-    }
     // rublesToKopecks округляет, а не отбрасывает: 19,99 не становится 19,98.
     // Валюта показывается своя: зарубежный чек — не рубли.
     val total = if (receipt.currency == "RUB") {
@@ -220,7 +230,7 @@ private fun LastReceiptRow(receipt: Receipt, modifier: Modifier = Modifier) {
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "$items $plural · $total",
+            text = "${positionsLabel(items)} · $total",
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
         )
