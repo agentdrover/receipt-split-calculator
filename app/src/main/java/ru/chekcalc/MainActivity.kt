@@ -38,6 +38,7 @@ import ru.chekcalc.ui.history.HistoryDetailScreen
 import ru.chekcalc.ui.history.HistoryFailure
 import ru.chekcalc.ui.history.HistoryScreen
 import ru.chekcalc.ui.history.HistoryViewModel
+import ru.chekcalc.ui.home.HomeScreen
 import ru.chekcalc.ui.import.PhotoImportScreen
 import ru.chekcalc.ui.manual.ManualEntryScreen
 import ru.chekcalc.ui.manual.ManualReceipt
@@ -128,6 +129,7 @@ class MainActivity : ComponentActivity() {
                         Screen.HOME -> HomeScreen(
                             lastReceipt = lastReceipt,
                             historyFailure = historyModel.failures.contains(HistoryFailure.SAVE),
+                            historyCount = historyModel.entries.size,
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
                                 reviewPhoto.clear()
@@ -324,60 +326,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeScreen(
-    lastReceipt: Receipt?,
-    historyFailure: Boolean,
-    onImport: () -> Unit,
-    onManual: () -> Unit,
-    onHistory: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
-        Column(modifier = Modifier.padding(inner).padding(22.dp)) {
-            Text("Расчёт по чеку", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "Сфотографируйте чек — приложение найдёт позиции и посчитает вашу часть.",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp, bottom = 20.dp),
-            )
-            lastReceipt?.let { receipt ->
-                Text(
-                    "Распознан чек: ${receipt.items.size} поз., итог ${receipt.total} ${receipt.currency}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(bottom = 16.dp),
-                )
-            }
-            Button(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
-                Text("Загрузить чек")
-            }
-            OutlinedButton(
-                onClick = onManual,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            ) {
-                Text("Ввести вручную")
-            }
-            OutlinedButton(
-                onClick = onHistory,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            ) {
-                Text("История")
-            }
-            Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
-                Text("Настройки")
-            }
-            if (historyFailure) {
-                Text(
-                    text = "Не удалось сохранить чек в историю. Попробуйте ещё раз.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
             }
         }
     }
