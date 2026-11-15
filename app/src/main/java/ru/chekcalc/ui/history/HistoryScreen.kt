@@ -169,6 +169,15 @@ fun HistoryScreen(
                             .padding(16.dp),
                     )
                 }
+                // Очередь могла не записаться при пустой истории: без этого
+                // действия несохранённый расчёт не отменить.
+                if (pendingCount > 0) {
+                    item(key = "clear-pending") {
+                        TextButton(onClick = { confirmClear = true }) {
+                            Text("Удалить всё", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
             } else if (!readFailure) {
                 item(key = "list") {
                     Column(
