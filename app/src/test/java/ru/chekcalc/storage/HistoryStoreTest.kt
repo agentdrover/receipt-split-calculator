@@ -8,6 +8,7 @@ import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.select.Choice
 import ru.chekcalc.ui.select.SelectableItem
 import ru.chekcalc.ui.select.SelectionState
+import java.io.File
 import java.nio.file.Files
 import java.util.UUID
 
@@ -122,5 +123,18 @@ class HistoryStoreTest {
 
         assertTrue(store.list().isEmpty())
         assertEquals(1, store.save(entry(id = "a")).size)
+    }
+
+    @Test
+    fun `сохранение после сбоя чтения оставляет копию прежних данных`() {
+        val file = file()
+        file.parentFile?.mkdirs()
+        file.writeText("{ это не json")
+
+        HistoryStore(file).save(entry(id = "a"))
+
+        val copy = File(file.parentFile, "history.json.corrupt")
+        assertTrue("копия прежней истории должна существовать", copy.exists())
+        assertEquals("{ это не json", copy.readText())
     }
 }
