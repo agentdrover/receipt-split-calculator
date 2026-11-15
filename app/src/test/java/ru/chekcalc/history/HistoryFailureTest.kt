@@ -46,4 +46,42 @@ class HistoryFailureTest {
             nextFailures(setOf(HistoryFailure.SAVE), null, succeeded = true),
         )
     }
+
+    @Test
+    fun `сбой чтения добавляется и не мешает другим`() {
+        assertEquals(
+            setOf(HistoryFailure.READ),
+            nextFailures(emptySet(), HistoryFailure.READ, succeeded = false),
+        )
+        assertEquals(
+            setOf(HistoryFailure.READ, HistoryFailure.SAVE),
+            nextFailures(setOf(HistoryFailure.SAVE), HistoryFailure.READ, succeeded = false),
+        )
+    }
+
+    @Test
+    fun `любой успех снимает сбой чтения`() {
+        val read = setOf(HistoryFailure.READ)
+        assertEquals(emptySet<HistoryFailure>(), nextFailures(read, null, succeeded = true))
+        assertEquals(
+            emptySet<HistoryFailure>(),
+            nextFailures(read, HistoryFailure.SAVE, succeeded = true),
+        )
+        assertEquals(
+            emptySet<HistoryFailure>(),
+            nextFailures(read, HistoryFailure.DELETE, succeeded = true),
+        )
+        assertEquals(
+            emptySet<HistoryFailure>(),
+            nextFailures(read, HistoryFailure.CLEAR, succeeded = true),
+        )
+    }
+
+    @Test
+    fun `неудача записи не снимает сбой чтения`() {
+        assertEquals(
+            setOf(HistoryFailure.READ, HistoryFailure.SAVE),
+            nextFailures(setOf(HistoryFailure.READ), HistoryFailure.SAVE, succeeded = false),
+        )
+    }
 }

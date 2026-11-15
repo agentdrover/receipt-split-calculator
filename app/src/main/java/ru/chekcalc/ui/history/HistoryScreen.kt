@@ -46,6 +46,8 @@ import androidx.activity.compose.BackHandler
 fun HistoryScreen(
     entries: List<HistoryEntry>,
     failures: Set<HistoryFailure>,
+    readFailure: Boolean = false,
+    copyNotice: Boolean = false,
     onOpen: (HistoryEntry) -> Unit,
     onDelete: (HistoryEntry) -> Unit,
     onClear: () -> Unit,
@@ -62,7 +64,10 @@ fun HistoryScreen(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            val historyProblems = failures.filter { it != HistoryFailure.SAVE }
+            // SAVE показывается на главном экране, READ — отдельным блоком ниже.
+            val historyProblems = failures.filter {
+                it != HistoryFailure.SAVE && it != HistoryFailure.READ
+            }
             if (historyProblems.isNotEmpty()) {
                 item(key = "failure") {
                     Text(
@@ -70,6 +75,7 @@ fun HistoryScreen(
                             when (kind) {
                                 HistoryFailure.DELETE -> "Не удалось удалить чек. Попробуйте ещё раз."
                                 HistoryFailure.CLEAR -> "Не удалось очистить историю. Попробуйте ещё раз."
+                                HistoryFailure.READ -> ""
                                 HistoryFailure.SAVE -> ""
                             }
                         },
@@ -97,7 +103,11 @@ fun HistoryScreen(
                         style = MaterialTheme.typography.headlineLarge.copy(fontFamily = FontFamily.Serif),
                     )
                     Text(
-                        text = if (entries.isEmpty()) "пока пусто" else "${entries.size} ${checksWord(entries.size)}",
+                        text = when {
+                            readFailure -> "не прочитана"
+                            entries.isEmpty() -> "пока пусто"
+                            else -> "${entries.size} ${checksWord(entries.size)}"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
@@ -105,7 +115,47 @@ fun HistoryScreen(
                 }
             }
 
-            if (entries.isEmpty()) {
+            if (readFailure) {
+                item(key = "read-failure") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.errorContainer)
+                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                    ) {
+                        Text(
+                            text = "История не прочитана: файл повреждён или не совпадает " +
+                                "с версией приложения. Прежние чеки не показаны.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        // Выход из нечитаемого состояния: иначе сохранение
+                        // заблокировано, а других действий над файлом нет.
+                        TextButton(onClick = { confirmClear = true }) {
+                            Text("Очистить историю", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+
+            if (copyNotice) {
+                item(key = "copy") {
+                    Text(
+                        text = "Прежняя история не читалась. Её байты сохранены " +
+                            "копией на устройстве.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                    )
+                }
+            }
+
+            if (!readFailure && entries.isEmpty()) {
                 item(key = "empty") {
                     Text(
                         text = "Здесь появятся проверенные чеки: дата, место и ваша сумма. Фото не сохраняется.",
@@ -118,7 +168,7 @@ fun HistoryScreen(
                             .padding(16.dp),
                     )
                 }
-            } else {
+            } else if (!readFailure) {
                 item(key = "list") {
                     Column(
                         modifier = Modifier
