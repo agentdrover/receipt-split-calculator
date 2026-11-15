@@ -115,11 +115,7 @@ fun HomeScreen(
                 GroupRow(
                     glyph = "◷",
                     title = "История",
-                    subtitle = when (historyCount) {
-                        0 -> "пока пусто"
-                        1 -> "1 сохранённый чек"
-                        else -> "$historyCount сохранённых чеков"
-                    },
+                    subtitle = historyLabel(historyCount),
                     onClick = openHistory,
                 )
                 HorizontalDivider(color = palette.line)
