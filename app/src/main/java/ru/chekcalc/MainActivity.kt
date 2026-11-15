@@ -11,7 +11,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,11 +22,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.util.UUID
 import ru.chekcalc.api.RecognitionClient
@@ -45,6 +51,7 @@ import ru.chekcalc.ui.manual.ManualReceipt
 import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.ReviewPhotoViewModel
 import ru.chekcalc.ui.review.ReviewScreen
+import ru.chekcalc.ui.review.deepRecognizeSummary
 import ru.chekcalc.ui.select.SelectionScreen
 import ru.chekcalc.storage.Payer
 import ru.chekcalc.storage.PayerStore
@@ -112,6 +119,19 @@ class MainActivity : ComponentActivity() {
                     runCatching { receiptJson.decodeFromString<SelectionState>(it) }.getOrNull()
                 }
                 // Форма ручного ввода тоже переживает поворот экрана.
+                val scope = rememberCoroutineScope()
+                // Глубокий разбор: состояние кнопки на экране проверки.
+                // remember, а не rememberSaveable: поворот отменяет запрос,
+                // и сохранённый true оставил бы кнопку заблокированной навсегда.
+                var deepBusy by remember { mutableStateOf(false) }
+                var deepSummary by rememberSaveable { mutableStateOf<String?>(null) }
+                // Результат глубокого разбора, ждущий подтверждения: пока он шёл,
+                // человек мог править черновик руками.
+                // saveable: поворот не должен выбрасывать оплаченный результат.
+                var pendingDeepJson by rememberSaveable { mutableStateOf<String?>(null) }
+                var pendingDeepBeforeJson by rememberSaveable { mutableStateOf<String?>(null) }
+                var reviewEditing by remember { mutableStateOf(false) }
+                var deepJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
                 var manualJson by rememberSaveable { mutableStateOf<String?>(null) }
                 val manualDraft = manualJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
@@ -120,6 +140,48 @@ class MainActivity : ComponentActivity() {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
                 }
                 val screen = Screen.valueOf(screenName)
+
+                if (!reviewEditing) pendingDeepJson?.let { pending ->
+                    AlertDialog(
+                        onDismissRequest = {
+                            pendingDeepJson = null
+                            pendingDeepBeforeJson = null
+                            deepSummary = "Оставили ваши правки"
+                        },
+                        title = { Text("Применить глубокий разбор?") },
+                        text = {
+                            Text(
+                                "Пока шло распознавание, вы правили черновик. " +
+                                    "Заменить его результатом глубокого разбора?",
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                draftJson = pending
+                                val fresh = runCatching {
+                                    receiptJson.decodeFromString<ReceiptDraft>(pending)
+                                }.getOrNull()
+                                val before = pendingDeepBeforeJson?.let {
+                                    runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
+                                }
+                                deepSummary = if (fresh != null && before != null) {
+                                    deepRecognizeSummary(before, fresh)
+                                } else {
+                                    "Результат глубокого разбора применён"
+                                }
+                                pendingDeepJson = null
+                                pendingDeepBeforeJson = null
+                            }) { Text("Заменить") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = {
+                                pendingDeepJson = null
+                                pendingDeepBeforeJson = null
+                                deepSummary = "Оставили ваши правки"
+                            }) { Text("Оставить") }
+                        },
+                    )
+                }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -154,6 +216,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onRecognized = { receipt, photoBytes ->
+                                // Новый чек — новая история: чужая сводка не про него.
+                                deepSummary = null
+                                pendingDeepJson = null
+                                pendingDeepBeforeJson = null
                                 reviewPhoto.set(photoBytes)
                                 checkSessionId = UUID.randomUUID().toString()
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
@@ -191,6 +257,13 @@ class MainActivity : ComponentActivity() {
 
                         Screen.REVIEW -> {
                             val current = draft
+                            // Глубокий режим меняет тело запроса только у DeepSeek:
+                            // у остальных провайдеров кнопка платила бы за пустой повтор.
+                            val deepAvailable = remember(current) {
+                                runCatching {
+                                    ru.chekcalc.api.disablesThinking(repository.load().baseUrl)
+                                }.getOrDefault(false)
+                            }
                             if (current == null) {
                                 screenName = Screen.HOME.name
                             } else {
@@ -212,10 +285,88 @@ class MainActivity : ComponentActivity() {
                                         screenName = Screen.SELECT.name
                                     },
                                     onBack = {
+                                        // Уход с экрана отменяет запрос: иначе флаг
+                                        // deepBusy держал бы «Дальше» на следующем чеке.
+                                        deepJob?.cancel()
+                                        deepJob = null
+                                        deepBusy = false
                                         reviewPhoto.clear()
+                                        deepSummary = null
+                                        pendingDeepJson = null
+                                        pendingDeepBeforeJson = null
                                         screenName = Screen.HOME.name
                                     },
                                     photo = reviewPhoto.photo,
+                                    deepBusy = deepBusy,
+                                    deepSummary = deepSummary,
+                                    onEditingChange = { reviewEditing = it },
+                                    deepAvailable = deepAvailable,
+                                    nextEnabled = !deepBusy,
+                                    onDeepRecognize = {
+                                        // Снимок фото и черновика на момент старта:
+                                        // по ним проверяем, что ответ всё ещё «наш».
+                                        val bytes = reviewPhoto.photo
+                                        if (bytes != null && !deepBusy) {
+                                            val before = current
+                                            val startedJson = draftJson
+                                            deepBusy = true
+                                            deepSummary = null
+                                            deepJob = scope.launch {
+                                                val settings = repository.load()
+                                                val result = withContext(Dispatchers.IO) {
+                                                    recognition.recognize(
+                                                        image = bytes,
+                                                        settings = settings,
+                                                        forceDeepThinking = true,
+                                                    )
+                                                }
+                                                // Пока шёл запрос, могли уйти назад и открыть
+                                                // другой чек: чужой ответ не применяем.
+                                                if (reviewPhoto.photo !== bytes ||
+                                                    screenName != Screen.REVIEW.name
+                                                ) {
+                                                    deepBusy = false
+                                                    return@launch
+                                                }
+                                                deepBusy = false
+                                                when (result) {
+                                                    is RecognitionResult.Success -> {
+                                                        val fresh = ReceiptDraft.fromReceipt(result.receipt)
+                                                        val freshJson = receiptJson.encodeToString(
+                                                            ReceiptDraft.serializer(),
+                                                            fresh,
+                                                        )
+                                                        if (reviewEditing) {
+                                                            // Открыт редактор: замена сдвинула бы id строк,
+                                                            // но результат уже оплачен — откладываем его.
+                                                            pendingDeepJson = freshJson
+                                                            pendingDeepBeforeJson = receiptJson.encodeToString(
+                                                                ReceiptDraft.serializer(),
+                                                                before,
+                                                            )
+                                                            deepSummary =
+                                                                "Результат готов — закройте редактор и подтвердите замену"
+                                                        } else if (draftJson != startedJson) {
+                                                            // Правки во время запроса не стираем молча.
+                                                            pendingDeepJson = freshJson
+                                                            pendingDeepBeforeJson =
+                                                                receiptJson.encodeToString(
+                                                                    ReceiptDraft.serializer(),
+                                                                    before,
+                                                                )
+                                                            deepSummary = "Результат готов — подтвердите замену правок"
+                                                        } else {
+                                                            draftJson = freshJson
+                                                            deepSummary = deepRecognizeSummary(before, fresh)
+                                                        }
+                                                    }
+                                                    is RecognitionResult.Failure -> {
+                                                        deepSummary = "Не вышло: ${result.message}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
                                 )
                             }
                         }
@@ -260,6 +411,12 @@ class MainActivity : ComponentActivity() {
                                         payerStore.save(updated)
                                     },
                                     onDone = {
+                                        deepSummary = null
+                                        pendingDeepJson = null
+                                        pendingDeepBeforeJson = null
+                                        deepBusy = false
+                                        deepJob?.cancel()
+                                        deepJob = null
                                         // Расчёт завершён: записываем его в историю,
                                         // затем чистим сессию.
                                         val finishedDraft = draft

@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -83,16 +84,31 @@ fun ReviewScreen(
     onNext: () -> Unit = {},
     onBack: () -> Unit = {},
     photo: ByteArray? = null,
+    // Перезапуск распознавания этого же фото в глубоком режиме.
+    onDeepRecognize: (() -> Unit)? = null,
+    deepBusy: Boolean = false,
+    deepSummary: String? = null,
+    // Наружу нужно знать, открыт ли редактор: во время правки позиции
+    // замена черновика сдвинула бы идентификаторы строк.
+    // Глубокий режим есть только у провайдера, который понимает флаг.
+    deepAvailable: Boolean = true,
+    // Пока идёт глубокий разбор, уходить с экрана нельзя: результат оплачен.
+    nextEnabled: Boolean = true,
+    onEditingChange: (Boolean) -> Unit = {},
 ) {
     // Системный Back и жест возвращают на главный экран, а не закрывают приложение.
     BackHandler { onBack() }
 
     // Лист правки переживает поворот: несохранённый ввод не теряется.
     var itemSheetOpen by rememberSaveable { mutableStateOf(false) }
+    var totalsSheetOpenForEdit by rememberSaveable { mutableStateOf(false) }
     var editingItem by rememberSaveable(stateSaver = ItemEditStateSaver) {
         mutableStateOf(ItemEditState.new())
     }
     var totalsSheetOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(itemSheetOpen, totalsSheetOpen) {
+        onEditingChange(itemSheetOpen || totalsSheetOpen)
+    }
     var editingTotals by rememberSaveable(stateSaver = TotalsEditStateSaver) {
         mutableStateOf(TotalsEditState.of(draft))
     }
@@ -117,7 +133,16 @@ fun ReviewScreen(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item(key = "header") { ReviewHeader(draft = draft, onBack = onBack) }
+            item(key = "header") {
+                ReviewHeader(
+                    draft = draft,
+                    onBack = onBack,
+                    showDeep = deepAvailable && onDeepRecognize != null && photo != null,
+                    deepBusy = deepBusy,
+                    deepSummary = deepSummary,
+                    onDeepRecognize = onDeepRecognize,
+                )
+            }
 
             if (photo != null) {
                 item(key = "photo") {
@@ -161,7 +186,7 @@ fun ReviewScreen(
             }
         }
 
-        PrimaryNextButton(onClick = onNext)
+        PrimaryNextButton(onClick = onNext, enabled = nextEnabled)
     }
 
     if (viewerOpen && photo != null) {
@@ -200,7 +225,14 @@ fun ReviewScreen(
 }
 
 @Composable
-private fun ReviewHeader(draft: ReceiptDraft, onBack: () -> Unit) {
+private fun ReviewHeader(
+    draft: ReceiptDraft,
+    onBack: () -> Unit,
+    showDeep: Boolean = false,
+    deepBusy: Boolean = false,
+    deepSummary: String? = null,
+    onDeepRecognize: (() -> Unit)? = null,
+) {
     Column {
         BackButton(onClick = onBack)
         Text(
@@ -214,6 +246,44 @@ private fun ReviewHeader(draft: ReceiptDraft, onBack: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
         )
+
+        if (showDeep && onDeepRecognize != null) {
+            // Строки теряются на длинных и мятых чеках: человек видит, что
+            // позиций меньше, чем в чеке, и добивает точность одной кнопкой.
+            val mismatch = !draft.residualOk
+            TextButton(
+                onClick = { if (!deepBusy) onDeepRecognize() },
+                enabled = !deepBusy,
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                Text(
+                    text = if (deepBusy) "Распознаём точнее…" else "Распознать точнее",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (mismatch) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!deepBusy) {
+                Text(
+                    text = if (mismatch) {
+                        "Позиции не сходятся с итогом: глубокий режим может найти пропущенные строки."
+                    } else {
+                        "Медленнее, но точнее: помогает на длинных и мятых чеках."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                )
+            }
+            deepSummary?.let { summary ->
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                )
+            }
+        }
     }
 }
 
@@ -336,9 +406,10 @@ private fun ResidualWarning(text: String) {
 }
 
 @Composable
-private fun PrimaryNextButton(onClick: () -> Unit) {
+private fun PrimaryNextButton(onClick: () -> Unit, enabled: Boolean = true) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(26.dp),
         contentPadding = PaddingValues(horizontal = 22.dp),
         modifier = Modifier
