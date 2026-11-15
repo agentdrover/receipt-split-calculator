@@ -209,7 +209,7 @@ private fun ReviewHeader(draft: ReceiptDraft, onBack: () -> Unit) {
             color = MaterialTheme.colorScheme.onBackground,
         )
         Text(
-            text = "${draft.items.size} ${positionsWord(draft.items.size)} · итог ${formatRublesGrouped(draft.totalKopecks)}",
+            text = "${draft.items.size} ${positionsWord(draft.items.size)} · итог ${formatRublesGrouped(draft.totalKopecks, draft.currency)}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -226,11 +226,11 @@ private fun TotalsCard(draft: ReceiptDraft, onEdit: () -> Unit) {
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onEdit),
     ) {
-        TotalRow("Итог", formatKopecks(draft.totalKopecks), bold = true)
+        TotalRow("Итог", formatKopecks(draft.totalKopecks, draft.currency), bold = true)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        TotalRow("Скидка", formatKopecks(draft.discountKopecks))
+        TotalRow("Скидка", formatKopecks(draft.discountKopecks, draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        TotalRow("Обслуживание", formatKopecks(draft.serviceKopecks))
+        TotalRow("Обслуживание", formatKopecks(draft.serviceKopecks, draft.currency))
     }
 }
 
@@ -267,7 +267,7 @@ private fun ItemsCard(
     ) {
         draft.items.forEachIndexed { index, item ->
             if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            ItemRow(item = item, onClick = { onEdit(item) })
+            ItemRow(item = item, currency = draft.currency, onClick = { onEdit(item) })
         }
         if (draft.items.isNotEmpty()) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -291,7 +291,7 @@ private fun ItemsCard(
 }
 
 @Composable
-private fun ItemRow(item: DraftItem, onClick: () -> Unit) {
+private fun ItemRow(item: DraftItem, currency: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -307,14 +307,14 @@ private fun ItemRow(item: DraftItem, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${item.qty?.let { formatQty(it) } ?: "1"} × ${formatKopecks(item.unitPriceKopecks)}",
+                text = "${item.qty?.let { formatQty(it) } ?: "1"} × ${formatKopecks(item.unitPriceKopecks, currency)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
         Text(
-            text = formatKopecks(item.amountKopecks),
+            text = formatKopecks(item.amountKopecks, currency),
             style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
             modifier = Modifier.padding(start = 12.dp),
         )
@@ -823,29 +823,35 @@ internal fun parseQty(text: String): Double? {
 }
 
 /** Рубли с разрядами и без лишних копеек: 124000 → «1 240 ₽», 124050 → «1 240,50 ₽». */
-internal fun formatRublesGrouped(kopecks: Long): String {
+internal fun formatRublesGrouped(kopecks: Long, currency: String = "RUB"): String {
     if (kopecks == Long.MIN_VALUE) return "—"
     val sign = if (kopecks < 0) "−" else ""
     val value = kotlin.math.abs(kopecks)
     val rubles = value / 100
     val rest = value % 100
     val grouped = rubles.toString().reversed().chunked(3).joinToString(" ").reversed()
+    val suffix = if (currency == "RUB") "₽" else currency
     return if (rest == 0L) {
-        "$sign$grouped ₽"
+        "$sign$grouped $suffix"
     } else {
-        "$sign$grouped,${rest.toString().padStart(2, '0')} ₽"
+        "$sign$grouped,${rest.toString().padStart(2, '0')} $suffix"
     }
 }
 
-/** Сумма для экрана проверки: копейки и разряды, как в макете: 1 240,00 ₽. */
-internal fun formatKopecks(kopecks: Long): String {
+/**
+ * Сумма для экранов: копейки и разряды, как в макете: 1 240,00 ₽.
+ *
+ * Валюта чека сохраняется: чек в вонах не должен выглядеть рублёвым (#2327).
+ */
+internal fun formatKopecks(kopecks: Long, currency: String = "RUB"): String {
     if (kopecks == Long.MIN_VALUE) return "—"
     val sign = if (kopecks < 0) "−" else ""
     val value = kotlin.math.abs(kopecks)
     val rubles = value / 100
     val rest = value % 100
     val grouped = rubles.toString().reversed().chunked(3).joinToString(" ").reversed()
-    return "$sign$grouped,${rest.toString().padStart(2, '0')} ₽"
+    val suffix = if (currency == "RUB") "₽" else currency
+    return "$sign$grouped,${rest.toString().padStart(2, '0')} $suffix"
 }
 
 /** Копейки в рубли для поля ввода: 39025 → «390.25». */

@@ -5,6 +5,14 @@ import org.junit.Test
 
 class MoneyTest {
     @Test
+    fun `формат с валютой чека`() {
+        assertEquals("1240,50 ₽", Money.format(124_050))
+        assertEquals("1240,50 ₽", Money.format(124_050, "RUB"))
+        assertEquals("174600 KRW", Money.format(17_460_000, "KRW"))
+        assertEquals("12,34 USD", Money.format(1_234, "USD"))
+    }
+
+    @Test
     fun `целые рубли печатаются без копеек`() {
         assertEquals("1394 ₽", Money.format(139_400))
     }

@@ -89,7 +89,7 @@ fun SelectionScreen(
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f),
                             )
-                            Text(Money.format(item.amountKopecks))
+                            Text(Money.format(item.amountKopecks, state.currency))
                         }
                         if (whole || shared != null) {
                             Row(
@@ -131,9 +131,9 @@ fun SelectionScreen(
         }
         val tipCaption = when {
             state.tipPercent != null && state.tipKopecks > 0 ->
-                "% от вашей части: ${Money.format(state.tipKopecks)}"
+                "% от вашей части: ${Money.format(state.tipKopecks, state.currency)}"
             state.tipPercent != null -> "% от вашей части"
-            state.tipKopecks > 0 -> "своя сумма: ${Money.format(state.tipKopecks)}"
+            state.tipKopecks > 0 -> "своя сумма: ${Money.format(state.tipKopecks, state.currency)}"
             else -> "% от вашей части"
         }
         Text(
@@ -171,12 +171,12 @@ fun SelectionScreen(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    "Ваша часть: ${Money.format(state.totalKopecks)}",
+                    "Ваша часть: ${Money.format(state.totalKopecks, state.currency)}",
                     style = MaterialTheme.typography.titleLarge,
                 )
                 if (state.tipKopecks > 0) {
                     Text(
-                        "в том числе чаевые ${Money.format(state.tipKopecks)}",
+                        "в том числе чаевые ${Money.format(state.tipKopecks, state.currency)}",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

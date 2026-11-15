@@ -66,7 +66,7 @@ fun SummaryScreen(
         BackButton(onClick = onBack)
         Text("Итог", style = MaterialTheme.typography.headlineSmall)
         Text(
-            text = "Переведите эту сумму: ${Money.format(summary.totalKopecks)}",
+            text = "Переведите эту сумму: ${Money.format(summary.totalKopecks, summary.currency)}",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
         )
@@ -108,7 +108,7 @@ fun SummaryScreen(
         }
 
         Text(
-            text = "Итог округлён до рубля — так проще переводить.",
+            text = "Итог округлён — так проще переводить.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 6.dp),
         )
@@ -130,7 +130,7 @@ fun SummaryScreen(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("ВАША ЧАСТЬ", style = MaterialTheme.typography.labelMedium)
                 Text(
-                    text = Money.format(summary.totalKopecks),
+                    text = Money.format(summary.totalKopecks, summary.currency),
                     style = MaterialTheme.typography.headlineMedium,
                 )
             }
