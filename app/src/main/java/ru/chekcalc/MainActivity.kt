@@ -11,7 +11,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -123,6 +125,9 @@ class MainActivity : ComponentActivity() {
                 // и сохранённый true оставил бы кнопку заблокированной навсегда.
                 var deepBusy by remember { mutableStateOf(false) }
                 var deepSummary by rememberSaveable { mutableStateOf<String?>(null) }
+                // Результат глубокого разбора, ждущий подтверждения: пока он шёл,
+                // человек мог править черновик руками.
+                var pendingDeepJson by remember { mutableStateOf<String?>(null) }
                 var manualJson by rememberSaveable { mutableStateOf<String?>(null) }
                 val manualDraft = manualJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
@@ -131,6 +136,38 @@ class MainActivity : ComponentActivity() {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
                 }
                 val screen = Screen.valueOf(screenName)
+
+                pendingDeepJson?.let { pending ->
+                    AlertDialog(
+                        onDismissRequest = {
+                            pendingDeepJson = null
+                            deepSummary = "Оставили ваши правки"
+                        },
+                        title = { Text("Применить глубокий разбор?") },
+                        text = {
+                            Text(
+                                "Пока шло распознавание, вы правили черновик. " +
+                                    "Заменить его результатом глубокого разбора?",
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                draftJson = pending
+                                pendingDeepJson = null
+                                val fresh = runCatching {
+                                    receiptJson.decodeFromString<ReceiptDraft>(pending)
+                                }.getOrNull()
+                                deepSummary = fresh?.let { "Результат глубокого разбора применён" }
+                            }) { Text("Заменить") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = {
+                                pendingDeepJson = null
+                                deepSummary = "Оставили ваши правки"
+                            }) { Text("Оставить") }
+                        },
+                    )
+                }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -233,6 +270,7 @@ class MainActivity : ComponentActivity() {
                                         val bytes = reviewPhoto.photo
                                         if (bytes != null && !deepBusy) {
                                             val before = current
+                                            val startedJson = draftJson
                                             deepBusy = true
                                             deepSummary = null
                                             scope.launch {
@@ -256,11 +294,18 @@ class MainActivity : ComponentActivity() {
                                                 when (result) {
                                                     is RecognitionResult.Success -> {
                                                         val fresh = ReceiptDraft.fromReceipt(result.receipt)
-                                                        draftJson = receiptJson.encodeToString(
+                                                        val freshJson = receiptJson.encodeToString(
                                                             ReceiptDraft.serializer(),
                                                             fresh,
                                                         )
-                                                        deepSummary = deepRecognizeSummary(before, fresh)
+                                                        if (draftJson != startedJson) {
+                                                            // Правки во время запроса не стираем молча.
+                                                            pendingDeepJson = freshJson
+                                                            deepSummary = "Результат готов — подтвердите замену правок"
+                                                        } else {
+                                                            draftJson = freshJson
+                                                            deepSummary = deepRecognizeSummary(before, fresh)
+                                                        }
                                                     }
                                                     is RecognitionResult.Failure -> {
                                                         deepSummary = "Не вышло: ${result.message}"
