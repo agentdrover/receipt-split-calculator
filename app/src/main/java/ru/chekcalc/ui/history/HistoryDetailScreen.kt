@@ -28,6 +28,7 @@ import ru.chekcalc.storage.HistoryEntry
 import ru.chekcalc.ui.review.DraftItem
 import ru.chekcalc.ui.review.formatKopecks
 import ru.chekcalc.ui.select.Choice
+import androidx.activity.compose.BackHandler
 
 /**
  * Просмотр сохранённого чека: позиции, отмеченные доли, чаевые и итог.
@@ -35,6 +36,9 @@ import ru.chekcalc.ui.select.Choice
  */
 @Composable
 fun HistoryDetailScreen(entry: HistoryEntry, onBack: () -> Unit) {
+    // Системный жест «назад» возвращает к списку истории.
+    BackHandler { onBack() }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 16.dp),

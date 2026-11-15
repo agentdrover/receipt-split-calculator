@@ -36,6 +36,7 @@ import ru.chekcalc.ui.review.formatKopecks
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.activity.compose.BackHandler
 
 /**
  * История чеков: список сохранённых расчётов, удаление и «удалить всё».
@@ -50,6 +51,9 @@ fun HistoryScreen(
     onClear: () -> Unit,
     onBack: () -> Unit,
 ) {
+    // Системный жест «назад» возвращает на главный, а не закрывает приложение.
+    BackHandler { onBack() }
+
     var confirmClear by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
