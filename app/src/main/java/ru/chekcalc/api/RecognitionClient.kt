@@ -99,7 +99,7 @@ class RecognitionClient(
             .url(settings.baseUrl.trimEnd('/') + "/chat/completions")
             .header("Authorization", "Bearer ${settings.apiKey}")
             .header("Content-Type", "application/json")
-            .post(buildBody(image, settings.model).toRequestBody(JSON_MEDIA))
+            .post(buildBody(image, settings).toRequestBody(JSON_MEDIA))
             .build()
 
         return suspendCancellableCoroutine { continuation ->
@@ -207,23 +207,32 @@ class RecognitionClient(
     private fun invalid(message: String) =
         RecognitionResult.Failure(FailureKind.INVALID_RESPONSE, message)
 
-    private fun buildBody(image: ByteArray, model: String): String {
+    private fun buildBody(image: ByteArray, settings: ProviderSettings): String {
         val encoded = Base64.getEncoder().encodeToString(image)
-        val payload = buildJsonObject(
-            model = model,
+        return buildJsonObject(
+            model = settings.model,
             dataUrl = "data:image/jpeg;base64,$encoded",
+            disableThinking = disablesThinking(settings.baseUrl),
         )
-        return payload
     }
 
-    private fun buildJsonObject(model: String, dataUrl: String): String = """
-        {"model":${JsonPrimitive(model)},
-         "response_format":{"type":"json_object"},
-         "messages":[{"role":"user","content":[
-           {"type":"text","text":${JsonPrimitive(PROMPT)}},
-           {"type":"image_url","image_url":{"url":${JsonPrimitive(dataUrl)}}}
-         ]}]}
-    """.trimIndent()
+    internal fun buildJsonObject(model: String, dataUrl: String, disableThinking: Boolean): String {
+        // deepseek-flash по умолчанию думает: на чек это лишние ~1 000 токенов
+        // рассуждений и секунды ожидания, а JSON-ответ от них не меняется.
+        val thinking = if (disableThinking) ""","thinking":{"type":"disabled"}""" else ""
+        return """
+            {"model":${JsonPrimitive(model)}$thinking,
+             "response_format":{"type":"json_object"},
+             "messages":[{"role":"user","content":[
+               {"type":"text","text":${JsonPrimitive(PROMPT)}},
+               {"type":"image_url","image_url":{"url":${JsonPrimitive(dataUrl)}}}
+             ]}]}
+        """.trimIndent()
+    }
+
+    /** Отключаем размышление только у официального DeepSeek: чужие шлюзы могут не знать поле. */
+    internal fun disablesThinking(baseUrl: String): Boolean =
+        runCatching { java.net.URI(baseUrl).host == "api.deepseek.com" }.getOrDefault(false)
 
     private fun stripCodeFence(content: String): String {
         val trimmed = content.trim()
@@ -258,7 +267,13 @@ class RecognitionClient(
             - скидку и обслуживание вынеси в discount и service_charge, их сумма уже внутри total;
             - если строка нечитаема, не выбрасывай её: qty = null и строка в warnings;
             - если чек не читается целиком, верни пустой items и объясни в warnings;
-            - суммы — числа, без пробелов и символов валюты.
+            - суммы — числа в валюте чека, без пробелов и символов валюты;
+              запятая с тремя цифрами после неё — разделитель тысяч («281,435» это
+              281435, «64,500» это 64500), а с одной-двумя — десятичный разделитель
+              («390,25» это 390.25); в валютах без копеек (KRW, JPY, VND, IDR)
+              суммы всегда целые;
+            - доставку, упаковку и сервисный сбор не добавляй в items: они идут
+              в service_charge или в warnings, а не отдельной позицией чека.
         """.trimIndent()
     }
 }

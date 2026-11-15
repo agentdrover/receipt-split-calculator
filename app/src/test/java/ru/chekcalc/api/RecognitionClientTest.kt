@@ -1,6 +1,8 @@
 package ru.chekcalc.api
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -222,5 +224,25 @@ class RecognitionClientTest {
         assertEquals(0L, ru.chekcalc.calc.rublesToKopecks(0.0))
         assertEquals(1L, ru.chekcalc.calc.rublesToKopecks(0.005))
         assertEquals(419900L, ru.chekcalc.calc.rublesToKopecks(4199.0))
+    }
+
+    @Test
+    fun `размышление отключаем только у официального DeepSeek`() {
+        assertTrue(client.disablesThinking("https://api.deepseek.com"))
+        assertTrue(client.disablesThinking("https://api.deepseek.com/v1"))
+        assertFalse(client.disablesThinking("https://openrouter.ai/api/v1"))
+        assertFalse(client.disablesThinking("https://api.deepseek.com.evil.example"))
+        assertFalse(client.disablesThinking("не url"))
+    }
+
+    @Test
+    fun `тело запроса несёт отключённое размышление и остаётся валидным JSON`() {
+        val body = client.buildJsonObject("deepseek-flash", "data:image/jpeg;base64,AA", disableThinking = true)
+        assertTrue(body.contains("\"thinking\":{\"type\":\"disabled\"}"))
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject
+        assertEquals("deepseek-flash", parsed["model"]!!.jsonPrimitive.content)
+
+        val without = client.buildJsonObject("deepseek-flash", "data:image/jpeg;base64,AA", disableThinking = false)
+        assertFalse(without.contains("thinking"))
     }
 }
