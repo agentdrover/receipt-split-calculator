@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
                     when (screen) {
                         Screen.HOME -> HomeScreen(
                             lastReceipt = lastReceipt,
-                            historyFailure = historyModel.failure == HistoryFailure.SAVE,
+                            historyFailure = historyModel.failures.contains(HistoryFailure.SAVE),
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
                                 reviewPhoto.clear()
@@ -232,21 +232,8 @@ class MainActivity : ComponentActivity() {
                                         )
                                     },
                                     onNext = {
-                                        // Расчёт завершён: сохраняем в историю и
-                                        // показываем итог, ничего не пересчитывая.
-                                        val finishedDraft = draft
-                                        if (finishedDraft != null) {
-                                            historyModel.save(
-                                                HistoryEntry(
-                                                    id = checkSessionId
-                                                        ?: UUID.randomUUID().toString(),
-                                                    createdAt = System.currentTimeMillis(),
-                                                    merchant = lastReceipt?.merchant,
-                                                    draft = finishedDraft,
-                                                    selection = current,
-                                                ),
-                                            )
-                                        }
+                                        // Показываем итог, ничего не пересчитывая;
+                                        // в историю чек попадёт на «Готово».
                                         summaryJson = receiptJson.encodeToString(
                                             ReceiptSummary.serializer(),
                                             ReceiptSummary.from(current),
@@ -271,7 +258,22 @@ class MainActivity : ComponentActivity() {
                                         payerStore.save(updated)
                                     },
                                     onDone = {
-                                        // Сессия проверки закончена — фото больше не нужно.
+                                        // Расчёт завершён: записываем его в историю,
+                                        // затем чистим сессию.
+                                        val finishedDraft = draft
+                                        val finishedSelection = selection
+                                        if (finishedDraft != null && finishedSelection != null) {
+                                            historyModel.save(
+                                                HistoryEntry(
+                                                    id = checkSessionId
+                                                        ?: UUID.randomUUID().toString(),
+                                                    createdAt = System.currentTimeMillis(),
+                                                    merchant = lastReceipt?.merchant,
+                                                    draft = finishedDraft,
+                                                    selection = finishedSelection,
+                                                ),
+                                            )
+                                        }
                                         reviewPhoto.clear()
                                         screenName = Screen.HOME.name
                                         lastReceiptJson = null
@@ -294,7 +296,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 screenName = Screen.HISTORY_DETAIL.name
                             },
-                            failure = historyModel.failure,
+                            failures = historyModel.failures,
                             onDelete = { entry -> historyModel.delete(entry.id) },
                             onClear = { historyModel.clear() },
                             onBack = { screenName = Screen.HOME.name },

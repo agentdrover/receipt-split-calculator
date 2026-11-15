@@ -19,17 +19,19 @@ import java.io.File
 enum class HistoryFailure { SAVE, DELETE, CLEAR }
 
 /**
- * Правило флага сбоя: неудача ставит свой вид, успех гасит только свой.
- * Иначе успешное удаление прятало бы предупреждение о несохранённом чеке.
+ * Правило сбоев: каждый вид живёт сам по себе. Неудача добавляет свой вид,
+ * успех снимает только свой; успешная очистка снимает и ошибку удаления —
+ * удалять больше нечего.
  */
-internal fun nextFailure(
-    current: HistoryFailure?,
+internal fun nextFailures(
+    current: Set<HistoryFailure>,
     kind: HistoryFailure?,
     succeeded: Boolean,
-): HistoryFailure? = when {
-    !succeeded -> kind ?: current
-    kind != null && current == kind -> null
-    else -> current
+): Set<HistoryFailure> = when {
+    !succeeded -> if (kind != null) current + kind else current
+    kind == null -> current
+    kind == HistoryFailure.CLEAR -> current - HistoryFailure.CLEAR - HistoryFailure.DELETE
+    else -> current - kind
 }
 
 /**
@@ -49,8 +51,8 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     var entries by mutableStateOf<List<HistoryEntry>>(emptyList())
         private set
 
-    /** Сбой операции истории: показываем его, а не делаем вид, что всё прошло. */
-    var failure by mutableStateOf<HistoryFailure?>(null)
+    /** Сбои операций истории: показываем их, а не делаем вид, что всё прошло. */
+    var failures by mutableStateOf<Set<HistoryFailure>>(emptySet())
         private set
 
     init {
@@ -74,7 +76,7 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
             val updated = withContext(Dispatchers.IO) {
                 runCatching(operation).getOrNull()
             }
-            failure = nextFailure(failure, kind, succeeded = updated != null)
+            failures = nextFailures(failures, kind, succeeded = updated != null)
             updated?.let { entries = it }
         }
     }

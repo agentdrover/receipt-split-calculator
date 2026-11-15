@@ -45,7 +45,7 @@ import androidx.activity.compose.BackHandler
 @Composable
 fun HistoryScreen(
     entries: List<HistoryEntry>,
-    failure: HistoryFailure?,
+    failures: Set<HistoryFailure>,
     onOpen: (HistoryEntry) -> Unit,
     onDelete: (HistoryEntry) -> Unit,
     onClear: () -> Unit,
@@ -62,13 +62,16 @@ fun HistoryScreen(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            failure?.takeIf { it != HistoryFailure.SAVE }?.let { kind ->
+            val historyProblems = failures.filter { it != HistoryFailure.SAVE }
+            if (historyProblems.isNotEmpty()) {
                 item(key = "failure") {
                     Text(
-                        text = when (kind) {
-                            HistoryFailure.DELETE -> "Не удалось удалить чек. Попробуйте ещё раз."
-                            HistoryFailure.CLEAR -> "Не удалось очистить историю. Попробуйте ещё раз."
-                            HistoryFailure.SAVE -> ""
+                        text = historyProblems.joinToString(" ") { kind ->
+                            when (kind) {
+                                HistoryFailure.DELETE -> "Не удалось удалить чек. Попробуйте ещё раз."
+                                HistoryFailure.CLEAR -> "Не удалось очистить историю. Попробуйте ещё раз."
+                                HistoryFailure.SAVE -> ""
+                            }
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,

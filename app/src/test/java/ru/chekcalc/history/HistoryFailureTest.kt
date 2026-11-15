@@ -1,35 +1,49 @@
 package ru.chekcalc.history
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.chekcalc.ui.history.HistoryFailure
-import ru.chekcalc.ui.history.nextFailure
+import ru.chekcalc.ui.history.nextFailures
 
 class HistoryFailureTest {
 
     @Test
-    fun `неудача ставит свой вид`() {
-        assertEquals(HistoryFailure.SAVE, nextFailure(null, HistoryFailure.SAVE, succeeded = false))
-        assertEquals(HistoryFailure.DELETE, nextFailure(null, HistoryFailure.DELETE, succeeded = false))
-        assertEquals(HistoryFailure.CLEAR, nextFailure(null, HistoryFailure.CLEAR, succeeded = false))
-    }
-
-    @Test
-    fun `успех другой операции не гасит сбой сохранения`() {
+    fun `неудача добавляет свой вид`() {
         assertEquals(
-            HistoryFailure.SAVE,
-            nextFailure(HistoryFailure.SAVE, HistoryFailure.DELETE, succeeded = true),
+            setOf(HistoryFailure.SAVE),
+            nextFailures(emptySet(), HistoryFailure.SAVE, succeeded = false),
         )
         assertEquals(
-            HistoryFailure.SAVE,
-            nextFailure(HistoryFailure.SAVE, null, succeeded = true),
+            setOf(HistoryFailure.SAVE, HistoryFailure.DELETE),
+            nextFailures(setOf(HistoryFailure.SAVE), HistoryFailure.DELETE, succeeded = false),
         )
     }
 
     @Test
-    fun `успех той же операции гасит сбой`() {
-        assertNull(nextFailure(HistoryFailure.SAVE, HistoryFailure.SAVE, succeeded = true))
-        assertNull(nextFailure(HistoryFailure.DELETE, HistoryFailure.DELETE, succeeded = true))
+    fun `успех гасит только свой вид`() {
+        assertEquals(
+            setOf(HistoryFailure.SAVE),
+            nextFailures(setOf(HistoryFailure.SAVE, HistoryFailure.DELETE), HistoryFailure.DELETE, succeeded = true),
+        )
+        assertEquals(
+            emptySet<HistoryFailure>(),
+            nextFailures(setOf(HistoryFailure.SAVE), HistoryFailure.SAVE, succeeded = true),
+        )
+    }
+
+    @Test
+    fun `успешная очистка снимает и ошибку удаления`() {
+        assertEquals(
+            emptySet<HistoryFailure>(),
+            nextFailures(setOf(HistoryFailure.DELETE), HistoryFailure.CLEAR, succeeded = true),
+        )
+    }
+
+    @Test
+    fun `загрузка списка не трогает сбои`() {
+        assertEquals(
+            setOf(HistoryFailure.SAVE),
+            nextFailures(setOf(HistoryFailure.SAVE), null, succeeded = true),
+        )
     }
 }
