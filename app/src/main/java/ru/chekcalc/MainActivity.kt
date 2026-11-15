@@ -291,6 +291,7 @@ class MainActivity : ComponentActivity() {
                                     deepSummary = deepSummary,
                                     onEditingChange = { reviewEditing = it },
                                     deepAvailable = deepAvailable,
+                                    nextEnabled = !deepBusy,
                                     onDeepRecognize = {
                                         // Снимок фото и черновика на момент старта:
                                         // по ним проверяем, что ответ всё ещё «наш».

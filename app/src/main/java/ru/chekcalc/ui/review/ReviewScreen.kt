@@ -92,6 +92,8 @@ fun ReviewScreen(
     // замена черновика сдвинула бы идентификаторы строк.
     // Глубокий режим есть только у провайдера, который понимает флаг.
     deepAvailable: Boolean = true,
+    // Пока идёт глубокий разбор, уходить с экрана нельзя: результат оплачен.
+    nextEnabled: Boolean = true,
     onEditingChange: (Boolean) -> Unit = {},
 ) {
     // Системный Back и жест возвращают на главный экран, а не закрывают приложение.
@@ -184,7 +186,7 @@ fun ReviewScreen(
             }
         }
 
-        PrimaryNextButton(onClick = onNext)
+        PrimaryNextButton(onClick = onNext, enabled = nextEnabled)
     }
 
     if (viewerOpen && photo != null) {
@@ -404,9 +406,10 @@ private fun ResidualWarning(text: String) {
 }
 
 @Composable
-private fun PrimaryNextButton(onClick: () -> Unit) {
+private fun PrimaryNextButton(onClick: () -> Unit, enabled: Boolean = true) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(26.dp),
         contentPadding = PaddingValues(horizontal = 22.dp),
         modifier = Modifier
