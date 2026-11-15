@@ -3,6 +3,7 @@ package ru.chekcalc.home
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import ru.chekcalc.ui.home.historyLabel
+import ru.chekcalc.ui.home.pendingLabel
 import ru.chekcalc.ui.home.positionsLabel
 
 class LabelsTest {
@@ -28,5 +29,16 @@ class LabelsTest {
         assertEquals("11 сохранённых чеков", historyLabel(11))
         assertEquals("21 сохранённый чек", historyLabel(21))
         assertEquals("22 сохранённых чека", historyLabel(22))
+    }
+
+    @Test
+    fun `очередь склоняется по числу`() {
+        assertEquals("1 чек ждёт записи", pendingLabel(1))
+        assertEquals("2 чека ждут записи", pendingLabel(2))
+        assertEquals("4 чека ждут записи", pendingLabel(4))
+        assertEquals("5 чеков ждут записи", pendingLabel(5))
+        assertEquals("11 чеков ждут записи", pendingLabel(11))
+        assertEquals("21 чек ждёт записи", pendingLabel(21))
+        assertEquals("22 чека ждут записи", pendingLabel(22))
     }
 }

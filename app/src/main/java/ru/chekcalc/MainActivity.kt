@@ -192,6 +192,8 @@ class MainActivity : ComponentActivity() {
                             lastReceipt = lastReceipt,
                             historyFailure = historyModel.failures.contains(HistoryFailure.SAVE),
                             historyReadFailure = historyModel.failures.contains(HistoryFailure.READ),
+                            historyPending = historyModel.saving.pending.size,
+                            onRetryHistory = { historyModel.retrySaves() },
                             historyCount = historyModel.entries.size,
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
@@ -458,7 +460,8 @@ class MainActivity : ComponentActivity() {
                             },
                             failures = historyModel.failures,
                             readFailure = historyModel.failures.contains(HistoryFailure.READ),
-                            copyNotice = historyModel.copyNotice,
+                            copyNotice = historyModel.saving.preservedCopy,
+                            pendingCount = historyModel.saving.pending.size,
                             onDelete = { entry -> historyModel.delete(entry.id) },
                             onClear = { historyModel.clear() },
                             onBack = { screenName = Screen.HOME.name },

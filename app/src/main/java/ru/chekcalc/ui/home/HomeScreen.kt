@@ -21,6 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,8 @@ fun HomeScreen(
     historyCount: Int = 0,
     historyFailure: Boolean = false,
     historyReadFailure: Boolean = false,
+    historyPending: Int = 0,
+    onRetryHistory: (() -> Unit)? = null,
 ) {
     val palette = LocalChekPalette.current
 
@@ -152,6 +155,23 @@ fun HomeScreen(
                 modifier = Modifier.padding(top = 12.dp),
             )
         }
+
+        // Кнопка видна по непустой очереди, а не по виду сбоя: чек мог
+        // не сохраниться и без флага на этом экране.
+        if (historyPending > 0) {
+            Column(modifier = Modifier.padding(top = 12.dp)) {
+                Text(
+                    text = pendingLabel(historyPending),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                onRetryHistory?.let { retry ->
+                    TextButton(onClick = retry) {
+                        Text("Сохранить ещё раз", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -168,6 +188,13 @@ internal fun historyLabel(count: Int): String = when {
     count % 10 == 1 && count % 100 != 11 -> "$count сохранённый чек"
     count % 10 in 2..4 && count % 100 !in 12..14 -> "$count сохранённых чека"
     else -> "$count сохранённых чеков"
+}
+
+/** Подпись очереди: «1 чек ждёт записи», «2 чека ждут записи», «5 чеков ждут записи». */
+internal fun pendingLabel(count: Int): String = when {
+    count % 10 == 1 && count % 100 != 11 -> "$count чек ждёт записи"
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "$count чека ждут записи"
+    else -> "$count чеков ждут записи"
 }
 
 @Composable
