@@ -233,7 +233,9 @@ class RecognitionClient(
     /** Отключаем размышление только у официального DeepSeek: чужие шлюзы могут не знать поле. */
     internal fun disablesThinking(baseUrl: String): Boolean =
         runCatching {
-            java.net.URI(baseUrl).host.equals("api.deepseek.com", ignoreCase = true)
+            // Хвостовая точка в FQDN — тот же хост, но строка другая.
+            java.net.URI(baseUrl).host?.trimEnd('.')
+                ?.equals("api.deepseek.com", ignoreCase = true) == true
         }.getOrDefault(false)
 
     private fun stripCodeFence(content: String): String {
