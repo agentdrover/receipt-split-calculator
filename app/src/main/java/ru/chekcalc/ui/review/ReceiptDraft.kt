@@ -107,9 +107,9 @@ data class ReceiptDraft(
             else ->
                 "в чеке меньше — возможно, цена строки прочитана неверно"
         }
-        return "По позициям ожидалось ${Money.format(expected)}, в чеке " +
-            "${Money.format(totalKopecks)}: разница ${Money.format(residualKopecks)}. " +
-            "Причина: $reason."
+        return "По позициям ожидалось ${Money.format(expected, currency)}, в чеке " +
+            "${Money.format(totalKopecks, currency)}: разница " +
+            "${Money.format(residualKopecks, currency)}. Причина: $reason."
     }
 
     companion object {
