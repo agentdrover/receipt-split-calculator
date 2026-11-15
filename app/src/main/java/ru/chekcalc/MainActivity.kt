@@ -240,6 +240,13 @@ class MainActivity : ComponentActivity() {
 
                         Screen.REVIEW -> {
                             val current = draft
+                            // Глубокий режим меняет тело запроса только у DeepSeek:
+                            // у остальных провайдеров кнопка платила бы за пустой повтор.
+                            val deepAvailable = remember(current) {
+                                runCatching {
+                                    recognition.disablesThinking(repository.load().baseUrl)
+                                }.getOrDefault(false)
+                            }
                             if (current == null) {
                                 screenName = Screen.HOME.name
                             } else {
@@ -268,7 +275,10 @@ class MainActivity : ComponentActivity() {
                                     deepBusy = deepBusy,
                                     deepSummary = deepSummary,
                                     onEditingChange = { reviewEditing = it },
+                                    deepAvailable = deepAvailable,
                                     onDeepRecognize = {
+                                        // Снимок фото и черновика на момент старта:
+                                        // по ним проверяем, что ответ всё ещё «наш».
                                         val bytes = reviewPhoto.photo
                                         if (bytes != null && !deepBusy) {
                                             val before = current

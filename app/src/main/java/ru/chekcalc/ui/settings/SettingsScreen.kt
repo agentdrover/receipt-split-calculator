@@ -240,6 +240,9 @@ fun SettingsScreen(
             modifier = Modifier.padding(top = 6.dp, start = 2.dp),
         )
 
+        // Переключатель имеет смысл только там, где провайдер понимает флаг.
+        val supportsDeep = isOfficialDeepSeek(baseUrl)
+        if (supportsDeep) {
         Caption("Распознавание", topPadding = 16.dp)
         GroupCard {
             Row(
@@ -266,6 +269,7 @@ fun SettingsScreen(
                     onCheckedChange = { deepThinking = it },
                 )
             }
+        }
         }
 
         Row(
@@ -350,6 +354,12 @@ fun SettingsScreen(
         )
     }
 }
+
+/** Глубокий режим понимает только официальный DeepSeek: чужие шлюзы поле могут не знать. */
+private fun isOfficialDeepSeek(baseUrl: String): Boolean = runCatching {
+    java.net.URI(baseUrl.trim().trimEnd('/')).host?.trimEnd('.')
+        ?.equals("api.deepseek.com", ignoreCase = true) == true
+}.getOrDefault(false)
 
 @Composable
 private fun Caption(text: String, topPadding: androidx.compose.ui.unit.Dp = 12.dp) {

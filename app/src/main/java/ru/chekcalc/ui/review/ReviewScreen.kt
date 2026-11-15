@@ -90,6 +90,8 @@ fun ReviewScreen(
     deepSummary: String? = null,
     // Наружу нужно знать, открыт ли редактор: во время правки позиции
     // замена черновика сдвинула бы идентификаторы строк.
+    // Глубокий режим есть только у провайдера, который понимает флаг.
+    deepAvailable: Boolean = true,
     onEditingChange: (Boolean) -> Unit = {},
 ) {
     // Системный Back и жест возвращают на главный экран, а не закрывают приложение.
@@ -133,7 +135,7 @@ fun ReviewScreen(
                 ReviewHeader(
                     draft = draft,
                     onBack = onBack,
-                    showDeep = onDeepRecognize != null && photo != null,
+                    showDeep = deepAvailable && onDeepRecognize != null && photo != null,
                     deepBusy = deepBusy,
                     deepSummary = deepSummary,
                     onDeepRecognize = onDeepRecognize,
