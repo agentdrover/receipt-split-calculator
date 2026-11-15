@@ -84,4 +84,14 @@ class HistoryFailureTest {
             nextFailures(setOf(HistoryFailure.READ), HistoryFailure.SAVE, succeeded = false),
         )
     }
+
+    @Test
+    fun `успешная очистка снимает и сбой сохранения`() {
+        // После очистки очереди повторять нечего: сообщение «попробуйте ещё раз»
+        // осталось бы без действия.
+        assertEquals(
+            emptySet<HistoryFailure>(),
+            nextFailures(setOf(HistoryFailure.SAVE), HistoryFailure.CLEAR, succeeded = true),
+        )
+    }
 }
