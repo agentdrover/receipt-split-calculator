@@ -17,8 +17,9 @@ data class CalcLine(
     val shareDenominator: Int = 1,
 ) {
     init {
+        require(amountKopecks >= 0) { "сумма позиции не может быть отрицательной" }
         require(shareDenominator > 0) { "знаменатель доли должен быть положительным" }
-        require(shareNumerator >= 0) { "доля не может быть отрицательной" }
+        require(shareNumerator in 0..shareDenominator) { "доля должна быть от 0 до 1" }
     }
 
     internal val share: Fraction
@@ -56,6 +57,7 @@ object ShareCalculator {
      * ответ в копейках: иначе 100,46 ₽ превращаются в 100 ₽ и процент врёт.
      */
     fun calculate(input: CalcInput, roundToRuble: Boolean = true): Breakdown {
+        validate(input)
         val subtotal = input.lines.sumOf { it.amountKopecks }
         val mine = input.lines.fold(Fraction.ZERO) { acc, line ->
             acc + Fraction.of(line.amountKopecks) * line.share
@@ -101,6 +103,7 @@ object ShareCalculator {
 
     /** Точный итог как дробь — для расчётов, где округлять нельзя. */
     internal fun totalFraction(input: CalcInput): Fraction {
+        validate(input)
         val subtotal = BigDecimal.valueOf(input.lines.sumOf { it.amountKopecks })
         val mine = input.lines.fold(Fraction.ZERO) { acc, line ->
             acc + Fraction.of(line.amountKopecks) * line.share
@@ -134,6 +137,35 @@ object ShareCalculator {
     /** residual = итог чека − (позиции − скидка + обслуживание). Больше 1 ₽ — чек не сошёлся. */
     fun residualKopecks(receiptTotal: Long, linesSum: Long, discount: Long, service: Long): Long =
         receiptTotal - (linesSum - discount + service)
+
+    /**
+     * Контракт допустимых значений для всех точек расчёта.
+     *
+     * Скидка может обнулить чек (ровно 100 %), но не уйти в минус: иначе
+     * доля становится отрицательной, а человек видит «−100 ₽ к переводу».
+     */
+    private fun validate(input: CalcInput) {
+        require(input.discountKopecks >= 0) { "скидка не может быть отрицательной" }
+        require(input.serviceKopecks >= 0) { "обслуживание не может быть отрицательным" }
+        require(input.tipKopecks >= 0) { "чаевые не могут быть отрицательными" }
+        val subtotal = sumKopecks(input.lines)
+        require(input.discountKopecks <= subtotal) { "скидка больше суммы позиций" }
+        require(subtotal > 0 || input.serviceKopecks == 0L) { "обслуживание без позиций" }
+        require(subtotal > 0 || input.tipKopecks == 0L) { "чаевые без позиций" }
+    }
+
+    /** Сумма позиций без переполнения: иначе итог молча станет отрицательным. */
+    private fun sumKopecks(lines: List<CalcLine>): Long {
+        var total = 0L
+        for (line in lines) {
+            total = try {
+                Math.addExact(total, line.amountKopecks)
+            } catch (overflow: ArithmeticException) {
+                throw IllegalArgumentException("сумма позиций слишком велика", overflow)
+            }
+        }
+        return total
+    }
 }
 
 /** Точная дробь на BigInteger: без потери точности до самого округления. */
