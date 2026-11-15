@@ -161,11 +161,7 @@ fun HomeScreen(
         if (historyPending > 0) {
             Column(modifier = Modifier.padding(top = 12.dp)) {
                 Text(
-                    text = if (historyPending == 1) {
-                        "Один чек ждёт записи в историю."
-                    } else {
-                        "Чеков ждут записи: $historyPending."
-                    },
+                    text = pendingLabel(historyPending),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -192,6 +188,13 @@ internal fun historyLabel(count: Int): String = when {
     count % 10 == 1 && count % 100 != 11 -> "$count сохранённый чек"
     count % 10 in 2..4 && count % 100 !in 12..14 -> "$count сохранённых чека"
     else -> "$count сохранённых чеков"
+}
+
+/** Подпись очереди: «1 чек ждёт записи», «2 чека ждут записи», «5 чеков ждут записи». */
+internal fun pendingLabel(count: Int): String = when {
+    count % 10 == 1 && count % 100 != 11 -> "$count чек ждёт записи"
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "$count чека ждут записи"
+    else -> "$count чеков ждут записи"
 }
 
 @Composable
