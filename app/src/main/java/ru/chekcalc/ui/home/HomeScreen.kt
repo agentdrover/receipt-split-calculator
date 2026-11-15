@@ -32,6 +32,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.chekcalc.calc.Money
+import ru.chekcalc.calc.rublesToKopecks
+import java.util.Locale
 import ru.chekcalc.model.Receipt
 import ru.chekcalc.ui.LocalChekPalette
 import ru.chekcalc.ui.components.BackButton
@@ -63,13 +65,15 @@ fun HomeScreen(
             .padding(horizontal = 22.dp, vertical = 8.dp),
     ) {
         Text(
-            text = "Сфотографируйте\nчек",
+            // Размер подобран под 320–390 dp: на 33 sp «Сфотографируйте»
+            // рвалось по слогам на узком экране.
+            text = "Сфотографируйте чек",
             style = MaterialTheme.typography.headlineLarge.copy(
                 fontFamily = FontFamily.Serif,
-                fontSize = 33.sp,
-                lineHeight = 35.sp,
+                fontSize = 30.sp,
+                lineHeight = 34.sp,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.6).sp,
+                letterSpacing = (-0.5).sp,
             ),
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(top = 4.dp),
@@ -166,7 +170,11 @@ private fun HeroCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Сфотографировать чек",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    lineHeight = 18.sp,
+                ),
                 color = palette.heroInk,
             )
             Text(
@@ -189,7 +197,13 @@ private fun LastReceiptRow(receipt: Receipt, modifier: Modifier = Modifier) {
         items % 10 in 2..4 && items % 100 !in 12..14 -> "позиции"
         else -> "позиций"
     }
-    val total = Money.format((receipt.total * 100).toLong())
+    // rublesToKopecks округляет, а не отбрасывает: 19,99 не становится 19,98.
+    // Валюта показывается своя: зарубежный чек — не рубли.
+    val total = if (receipt.currency == "RUB") {
+        Money.format(rublesToKopecks(receipt.total))
+    } else {
+        "%s %s".format(Locale.US, "%.2f".format(Locale.US, receipt.total), receipt.currency)
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,

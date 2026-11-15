@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -42,6 +43,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -220,7 +223,11 @@ fun SettingsScreen(
                         PasswordVisualTransformation()
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth(0.55f),
+                    // TalkBack должен назвать поле, иначе строка читается как значение.
+                    modifier = Modifier
+                        .fillMaxWidth(0.55f)
+                        .clipToBounds()
+                        .semantics { contentDescription = "Ключ ${provider.title}" },
                 )
             }
         }
@@ -364,7 +371,10 @@ private fun ValueRow(
             ),
             cursorBrush = SolidColor(palette.hero),
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            modifier = Modifier.fillMaxWidth(0.62f),
+            modifier = Modifier
+                .fillMaxWidth(0.62f)
+                .clipToBounds()
+                .semantics { contentDescription = label },
         )
     }
 }
