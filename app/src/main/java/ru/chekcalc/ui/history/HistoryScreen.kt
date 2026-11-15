@@ -193,7 +193,7 @@ private fun HistoryRow(entry: HistoryEntry, onOpen: () -> Unit, onDelete: () -> 
             )
         }
         Text(
-            text = formatKopecks(entry.myShareKopecks, entry.selection.currency),
+            text = formatKopecks(entry.myShareKopecks, entry.draft.currency),
             style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
             modifier = Modifier.padding(start = 12.dp),
         )

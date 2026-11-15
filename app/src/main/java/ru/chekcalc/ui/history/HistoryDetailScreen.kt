@@ -104,9 +104,9 @@ private fun TotalsCard(entry: HistoryEntry) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         RowValue("Обслуживание", formatKopecks(entry.draft.serviceKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Чаевые", formatKopecks(entry.selection.tipKopecks, entry.selection.currency))
+        RowValue("Чаевые", formatKopecks(entry.selection.tipKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Ваша часть", formatKopecks(entry.myShareKopecks, entry.selection.currency), bold = true)
+        RowValue("Ваша часть", formatKopecks(entry.myShareKopecks, entry.draft.currency), bold = true)
     }
 }
 
