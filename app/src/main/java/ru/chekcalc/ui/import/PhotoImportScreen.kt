@@ -44,6 +44,7 @@ import ru.chekcalc.image.PhotoOrientation
 import ru.chekcalc.image.PhotoSizing
 import ru.chekcalc.model.Receipt
 import java.io.File
+import ru.chekcalc.ui.components.BackButton
 
 /**
  * Импорт чека: камера или галерея, затем подготовка фото к отправке.
@@ -192,7 +193,7 @@ fun PhotoImportScreen(
             .verticalScroll(rememberScrollState())
             .padding(22.dp),
     ) {
-        TextButton(onClick = { leave() }) { Text("Назад") }
+        BackButton(onClick = { leave() })
         Text("Чек", style = MaterialTheme.typography.headlineSmall)
         Text(
             "Сфотографируйте чек целиком или выберите готовое фото. Фото сжимается на телефоне и никуда не сохраняется.",
