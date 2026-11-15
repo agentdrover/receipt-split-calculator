@@ -230,6 +230,7 @@ class RecognitionClientTest {
     fun `размышление отключаем только у официального DeepSeek`() {
         assertTrue(client.disablesThinking("https://api.deepseek.com"))
         assertTrue(client.disablesThinking("https://api.deepseek.com/v1"))
+        assertTrue(client.disablesThinking("https://API.DEEPSEEK.COM"))
         assertFalse(client.disablesThinking("https://openrouter.ai/api/v1"))
         assertFalse(client.disablesThinking("https://api.deepseek.com.evil.example"))
         assertFalse(client.disablesThinking("не url"))

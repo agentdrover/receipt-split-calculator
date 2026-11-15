@@ -232,7 +232,9 @@ class RecognitionClient(
 
     /** Отключаем размышление только у официального DeepSeek: чужие шлюзы могут не знать поле. */
     internal fun disablesThinking(baseUrl: String): Boolean =
-        runCatching { java.net.URI(baseUrl).host == "api.deepseek.com" }.getOrDefault(false)
+        runCatching {
+            java.net.URI(baseUrl).host.equals("api.deepseek.com", ignoreCase = true)
+        }.getOrDefault(false)
 
     private fun stripCodeFence(content: String): String {
         val trimmed = content.trim()
@@ -272,8 +274,9 @@ class RecognitionClient(
               281435, «64,500» это 64500), а с одной-двумя — десятичный разделитель
               («390,25» это 390.25); в валютах без копеек (KRW, JPY, VND, IDR)
               суммы всегда целые;
-            - доставку, упаковку и сервисный сбор не добавляй в items: они идут
-              в service_charge или в warnings, а не отдельной позицией чека.
+            - доставку, упаковку и сервисный сбор вынеси в service_charge
+              (present = true, amount), в items их не добавляй; в warnings —
+              только если сумма нечитаема.
         """.trimIndent()
     }
 }
