@@ -21,6 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,8 @@ fun HomeScreen(
     historyCount: Int = 0,
     historyFailure: Boolean = false,
     historyReadFailure: Boolean = false,
+    historyPending: Int = 0,
+    onRetryHistory: (() -> Unit)? = null,
 ) {
     val palette = LocalChekPalette.current
 
@@ -151,6 +154,27 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 12.dp),
             )
+        }
+
+        // Кнопка видна по непустой очереди, а не по виду сбоя: чек мог
+        // не сохраниться и без флага на этом экране.
+        if (historyPending > 0) {
+            Column(modifier = Modifier.padding(top = 12.dp)) {
+                Text(
+                    text = if (historyPending == 1) {
+                        "Один чек ждёт записи в историю."
+                    } else {
+                        "Чеков ждут записи: $historyPending."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                onRetryHistory?.let { retry ->
+                    TextButton(onClick = retry) {
+                        Text("Сохранить ещё раз", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
         }
     }
 }

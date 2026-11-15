@@ -48,6 +48,7 @@ fun HistoryScreen(
     failures: Set<HistoryFailure>,
     readFailure: Boolean = false,
     copyNotice: Boolean = false,
+    pendingCount: Int = 0,
     onOpen: (HistoryEntry) -> Unit,
     onDelete: (HistoryEntry) -> Unit,
     onClear: () -> Unit,
@@ -199,7 +200,17 @@ fun HistoryScreen(
         AlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text("Удалить всю историю?") },
-            text = { Text("Все сохранённые чеки исчезнут с этого телефона. Фото и так не хранится.") },
+            text = {
+                Text(
+                    if (pendingCount > 0) {
+                        "Все сохранённые чеки исчезнут с этого телефона. " +
+                            "Несохранённые расчёты ($pendingCount) тоже будут потеряны. " +
+                            "Фото и так не хранится."
+                    } else {
+                        "Все сохранённые чеки исчезнут с этого телефона. Фото и так не хранится."
+                    },
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false

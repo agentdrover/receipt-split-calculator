@@ -15,7 +15,6 @@ import ru.chekcalc.storage.DeleteOutcome
 import ru.chekcalc.storage.HistoryEntry
 import ru.chekcalc.storage.HistoryLoad
 import ru.chekcalc.storage.HistoryStore
-import ru.chekcalc.storage.SaveOutcome
 import java.io.File
 
 /** Какая операция истории не удалась: от этого зависит текст для человека. */
@@ -24,7 +23,7 @@ enum class HistoryFailure { READ, SAVE, DELETE, CLEAR }
 /**
  * Правило сбоев: каждый вид живёт сам по себе. Неудача добавляет свой вид,
  * успех снимает только свой; успешная очистка снимает и ошибку удаления —
- * удалять больше нечего.
+ * удалять больше нечего — и сбой сохранения: очередь снята.
  *
  * READ снимается любой успешной операцией: она доказывает, что текущий файл
  * читается, даже если читали его ради записи.
@@ -38,8 +37,28 @@ internal fun nextFailures(
     return when {
         !succeeded -> if (kind != null) base + kind else base
         kind == null -> base
-        kind == HistoryFailure.CLEAR -> base - HistoryFailure.CLEAR - HistoryFailure.DELETE
+        kind == HistoryFailure.CLEAR -> base - HistoryFailure.CLEAR - HistoryFailure.DELETE -
+            HistoryFailure.SAVE
         else -> base - kind
+    }
+}
+
+/**
+ * Сбои после попытки записи очереди.
+ *
+ * Успешно записанная запись доказывает, что файл читается: READ снимается,
+ * даже если следующая запись в очереди упала.
+ */
+internal fun nextFailuresAfterSave(
+    current: Set<HistoryFailure>,
+    failure: SaveFailure?,
+    anySaved: Boolean,
+): Set<HistoryFailure> {
+    val base = if (anySaved) current - HistoryFailure.READ else current
+    return when (failure) {
+        null -> base - HistoryFailure.SAVE
+        SaveFailure.READ -> (base - HistoryFailure.SAVE) + HistoryFailure.READ
+        SaveFailure.SAVE -> base + HistoryFailure.SAVE
     }
 }
 
@@ -53,6 +72,9 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
 
     private val store = HistoryStore(File(application.filesDir, "history.json"))
 
+    // Записи идут через очередь: неудачная не теряется, а ждёт повтора.
+    private val saver = HistorySaver(write = { entry -> store.save(entry) })
+
     // Операции и публикация списка — под одним замком: иначе два быстрых
     // удаления могли применить устаревший снимок и вернуть удалённую запись.
     private val mutex = Mutex()
@@ -64,8 +86,8 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     var failures by mutableStateOf<Set<HistoryFailure>>(emptySet())
         private set
 
-    /** Прежняя история не читалась, но её байты сохранены копией на устройстве. */
-    var copyNotice by mutableStateOf(false)
+    /** Очередь записей и её состояние: что ждёт, почему, и флаг копии. */
+    var saving by mutableStateOf(HistorySaveState())
         private set
 
     init {
@@ -74,6 +96,11 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
 
     fun save(entry: HistoryEntry) {
         viewModelScope.launch { saveLocked(entry) }
+    }
+
+    /** Повтор всей очереди: кнопка «Сохранить ещё раз» на главном экране. */
+    fun retrySaves() {
+        viewModelScope.launch { retryLocked() }
     }
 
     fun delete(id: String) {
@@ -103,22 +130,24 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun saveLocked(entry: HistoryEntry) {
         mutex.withLock {
-            // Исключение записи — отдельный сбой: файл читается, но записать не вышло.
-            val outcome = withContext(Dispatchers.IO) { runCatching { store.save(entry) } }.getOrNull()
-            if (outcome == null) {
-                failures = nextFailures(failures, HistoryFailure.SAVE, succeeded = false)
-                return@withLock
-            }
-            when (outcome) {
-                is SaveOutcome.Saved -> {
-                    entries = outcome.entries
-                    failures = nextFailures(failures, HistoryFailure.SAVE, succeeded = true)
-                    if (outcome.preservedCopy) copyNotice = true
-                }
-                is SaveOutcome.ReadFailure ->
-                    failures = nextFailures(failures, HistoryFailure.READ, succeeded = false)
-            }
+            publish(withContext(Dispatchers.IO) { saver.submit(entry) })
         }
+    }
+
+    private suspend fun retryLocked() {
+        mutex.withLock {
+            publish(withContext(Dispatchers.IO) { saver.retry() })
+        }
+    }
+
+    private fun publish(result: HistorySaveState) {
+        saving = result
+        result.saved?.let { entries = it }
+        failures = nextFailuresAfterSave(
+            current = failures,
+            failure = result.failure,
+            anySaved = result.saved != null,
+        )
     }
 
     private suspend fun deleteLocked(id: String) {
@@ -132,6 +161,10 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
                 is DeleteOutcome.Deleted -> {
                     entries = outcome.entries
                     failures = nextFailures(failures, HistoryFailure.DELETE, succeeded = true)
+                    // Удалённый чек не должен вернуться из очереди.
+                    val queue = withContext(Dispatchers.IO) { saver.removed(id) }
+                    saving = queue
+                    if (queue.pending.isEmpty()) failures = failures - HistoryFailure.SAVE
                 }
                 is DeleteOutcome.ReadFailure ->
                     failures = nextFailures(failures, HistoryFailure.READ, succeeded = false)
@@ -145,7 +178,7 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
             failures = nextFailures(failures, HistoryFailure.CLEAR, succeeded = updated != null)
             if (updated != null) {
                 entries = updated
-                copyNotice = false
+                saving = withContext(Dispatchers.IO) { saver.cleared() }
             }
         }
     }
