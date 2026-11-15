@@ -26,12 +26,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.serialization.json.Json
+import java.util.UUID
 import ru.chekcalc.api.RecognitionClient
 import ru.chekcalc.model.Receipt
 import ru.chekcalc.api.RecognitionResult
 import ru.chekcalc.storage.EncryptedSecretStore
+import ru.chekcalc.storage.HistoryEntry
 import ru.chekcalc.storage.SettingsRepository
 import ru.chekcalc.ui.ChekCalcTheme
+import ru.chekcalc.ui.history.HistoryDetailScreen
+import ru.chekcalc.ui.history.HistoryFailure
+import ru.chekcalc.ui.history.HistoryScreen
+import ru.chekcalc.ui.history.HistoryViewModel
 import ru.chekcalc.ui.home.HomeScreen
 import ru.chekcalc.ui.import.PhotoImportScreen
 import ru.chekcalc.ui.manual.ManualEntryScreen
@@ -47,7 +53,7 @@ import ru.chekcalc.ui.summary.ReceiptSummary
 import ru.chekcalc.ui.summary.SummaryScreen
 import ru.chekcalc.ui.settings.SettingsScreen
 
-private enum class Screen { HOME, IMPORT, REVIEW, MANUAL, SELECT, SUMMARY, SETTINGS }
+private enum class Screen { HOME, IMPORT, REVIEW, MANUAL, SELECT, SUMMARY, HISTORY, HISTORY_DETAIL, SETTINGS }
 
 /** Сохранение реквизитов в состоянии экрана: две строки переживают поворот и смерть процесса. */
 val PayerSaver: Saver<Payer, Any> = listSaver(
@@ -68,6 +74,14 @@ class MainActivity : ComponentActivity() {
                 // Фото чека живёт в памяти, пока идёт проверка: поворот экрана
                 // не должен его стирать, а на диск оно не попадает.
                 val reviewPhoto: ReviewPhotoViewModel = viewModel()
+                // История живёт в ViewModel: запись переживает поворот экрана.
+                val historyModel: HistoryViewModel = viewModel()
+                // Открытая запись хранится JSON-ом: поворот не должен
+                // выкидывать из просмотра, пока список ещё не перечитан.
+                var historyEntryJson by rememberSaveable { mutableStateOf<String?>(null) }
+                // Одна сессия расчёта = одна запись в истории: повторный
+                // «Дальше» не плодит дубли, а новый чек получает новый id.
+                var checkSessionId by rememberSaveable { mutableStateOf<String?>(null) }
                 // rememberSaveable: поворот экрана или пересоздание Activity
                 // не должны выбрасывать человека с текущего экрана.
                 var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
@@ -114,12 +128,15 @@ class MainActivity : ComponentActivity() {
                     when (screen) {
                         Screen.HOME -> HomeScreen(
                             lastReceipt = lastReceipt,
+                            historyFailure = historyModel.failures.contains(HistoryFailure.SAVE),
+                            historyCount = historyModel.entries.size,
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
                                 reviewPhoto.clear()
                                 manualJson = null
                                 screenName = Screen.MANUAL.name
                             },
+                            onHistory = { screenName = Screen.HISTORY.name },
                             onOpenSettings = { screenName = Screen.SETTINGS.name },
                         )
 
@@ -138,6 +155,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onRecognized = { receipt, photoBytes ->
                                 reviewPhoto.set(photoBytes)
+                                checkSessionId = UUID.randomUUID().toString()
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                                 val draftValue = ReceiptDraft.fromReceipt(receipt)
                                 draftJson = receiptJson.encodeToString(ReceiptDraft.serializer(), draftValue)
@@ -160,6 +178,7 @@ class MainActivity : ComponentActivity() {
                                 // Ручной чек идёт тем же путём, что распознанный:
                                 // сначала receipt.v1, потом черновик проверки. Фото нет.
                                 reviewPhoto.clear()
+                                checkSessionId = UUID.randomUUID().toString()
                                 val receipt = ManualReceipt.toReceipt(entered)
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
                                 val reviewDraft = ReceiptDraft.fromReceipt(receipt)
@@ -215,8 +234,8 @@ class MainActivity : ComponentActivity() {
                                         )
                                     },
                                     onNext = {
-                                        // Итог собираем здесь один раз: экран итога
-                                        // ничего не пересчитывает и показывает те же цифры.
+                                        // Показываем итог, ничего не пересчитывая;
+                                        // в историю чек попадёт на «Готово».
                                         summaryJson = receiptJson.encodeToString(
                                             ReceiptSummary.serializer(),
                                             ReceiptSummary.from(current),
@@ -241,7 +260,22 @@ class MainActivity : ComponentActivity() {
                                         payerStore.save(updated)
                                     },
                                     onDone = {
-                                        // Сессия проверки закончена — фото больше не нужно.
+                                        // Расчёт завершён: записываем его в историю,
+                                        // затем чистим сессию.
+                                        val finishedDraft = draft
+                                        val finishedSelection = selection
+                                        if (finishedDraft != null && finishedSelection != null) {
+                                            historyModel.save(
+                                                HistoryEntry(
+                                                    id = checkSessionId
+                                                        ?: UUID.randomUUID().toString(),
+                                                    createdAt = System.currentTimeMillis(),
+                                                    merchant = lastReceipt?.merchant,
+                                                    draft = finishedDraft,
+                                                    selection = finishedSelection,
+                                                ),
+                                            )
+                                        }
                                         reviewPhoto.clear()
                                         screenName = Screen.HOME.name
                                         lastReceiptJson = null
@@ -251,6 +285,37 @@ class MainActivity : ComponentActivity() {
                                         summaryJson = null
                                     },
                                     onBack = { screenName = Screen.SELECT.name },
+                                )
+                            }
+                        }
+
+                        Screen.HISTORY -> HistoryScreen(
+                            entries = historyModel.entries,
+                            onOpen = { entry ->
+                                historyEntryJson = receiptJson.encodeToString(
+                                    HistoryEntry.serializer(),
+                                    entry,
+                                )
+                                screenName = Screen.HISTORY_DETAIL.name
+                            },
+                            failures = historyModel.failures,
+                            onDelete = { entry -> historyModel.delete(entry.id) },
+                            onClear = { historyModel.clear() },
+                            onBack = { screenName = Screen.HOME.name },
+                        )
+
+                        Screen.HISTORY_DETAIL -> {
+                            val entry = historyEntryJson?.let {
+                                runCatching {
+                                    receiptJson.decodeFromString(HistoryEntry.serializer(), it)
+                                }.getOrNull()
+                            }
+                            if (entry == null) {
+                                screenName = Screen.HISTORY.name
+                            } else {
+                                HistoryDetailScreen(
+                                    entry = entry,
+                                    onBack = { screenName = Screen.HISTORY.name },
                                 )
                             }
                         }
