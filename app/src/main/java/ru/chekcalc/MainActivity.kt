@@ -191,6 +191,7 @@ class MainActivity : ComponentActivity() {
                         Screen.HOME -> HomeScreen(
                             lastReceipt = lastReceipt,
                             historyFailure = historyModel.failures.contains(HistoryFailure.SAVE),
+                            historyReadFailure = historyModel.failures.contains(HistoryFailure.READ),
                             historyCount = historyModel.entries.size,
                             onImport = { screenName = Screen.IMPORT.name },
                             onManual = {
@@ -456,6 +457,8 @@ class MainActivity : ComponentActivity() {
                                 screenName = Screen.HISTORY_DETAIL.name
                             },
                             failures = historyModel.failures,
+                            readFailure = historyModel.failures.contains(HistoryFailure.READ),
+                            copyNotice = historyModel.copyNotice,
                             onDelete = { entry -> historyModel.delete(entry.id) },
                             onClear = { historyModel.clear() },
                             onBack = { screenName = Screen.HOME.name },
