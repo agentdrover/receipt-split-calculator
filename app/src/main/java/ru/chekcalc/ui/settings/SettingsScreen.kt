@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,8 +20,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.sp
@@ -65,7 +66,6 @@ import ru.chekcalc.ui.components.BackButton
  * и ключ. Ключ нигде не логируется и уходит в сеть только по кнопке
  * «Проверить», с сохранёнными настройками и в фоновом потоке.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     repository: SettingsRepository,
@@ -120,18 +120,16 @@ fun SettingsScreen(
             modifier = Modifier.padding(top = 6.dp),
         )
 
-        // Провайдер: строка-группа, по нажатию — список.
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
-            modifier = Modifier.padding(top = 16.dp),
-        ) {
-            GroupCard(modifier = Modifier.menuAnchor()) {
+        // Провайдер: строка-группа, по нажатию — список. Явный DropdownMenu
+        // вместо ExposedDropdownMenuBox: на кастомной строке menuAnchor не
+        // принимает нажатие, а вместе со своим clickable список не открывался.
+        Box(modifier = Modifier.padding(top = 16.dp)) {
+            GroupCard {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { expanded = true }
+                        .clickable { expanded = !expanded }
                         .heightIn(min = 56.dp)
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                 ) {
@@ -151,8 +149,8 @@ fun SettingsScreen(
                     Text("›", fontSize = 19.sp, color = palette.faint)
                 }
             }
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                ProviderPreset.entries.forEach { preset ->
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                ProviderPreset.entries.forEachIndexed { index, preset ->
                     DropdownMenuItem(
                         text = { Text(preset.title) },
                         onClick = {
@@ -161,6 +159,7 @@ fun SettingsScreen(
                             apply(repository.switchTo(preset))
                             message = null
                         },
+                        modifier = Modifier.testTag("provider-option-$index"),
                     )
                 }
             }

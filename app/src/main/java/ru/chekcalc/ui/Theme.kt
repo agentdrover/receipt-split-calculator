@@ -42,6 +42,8 @@ data class ChekPalette(
     val line: Color,
     val muted: Color,
     val faint: Color,
+    /** Цвет мелких глифов в строках: в тёмной теме тёмно-зелёный не виден. */
+    val glyph: Color,
 )
 
 private val LightPalette = ChekPalette(
@@ -50,6 +52,7 @@ private val LightPalette = ChekPalette(
     line = Color(0xFFE7DFCF),
     muted = Color(0xFF726C5E),
     faint = Color(0xFF9A9384),
+    glyph = Green,
 )
 
 private val DarkPalette = ChekPalette(
@@ -58,6 +61,7 @@ private val DarkPalette = ChekPalette(
     line = Color(0xFF2E2A22),
     muted = Color(0xFFA79F8E),
     faint = Color(0xFF6E6758),
+    glyph = Color(0xFF7FC6A8),
 )
 
 val LocalChekPalette = staticCompositionLocalOf { LightPalette }

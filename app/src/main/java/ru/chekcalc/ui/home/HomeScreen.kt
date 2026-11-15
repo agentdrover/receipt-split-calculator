@@ -257,7 +257,7 @@ private fun GroupRow(
     ) {
         Text(
             text = glyph,
-            color = palette.hero,
+            color = palette.glyph,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.size(width = 26.dp, height = 20.dp),
