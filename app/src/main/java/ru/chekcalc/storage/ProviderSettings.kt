@@ -6,6 +6,8 @@ data class ProviderSettings(
     val apiKey: String = "",
     val baseUrl: String = "",
     val model: String = "",
+    /** Глубокое распознавание: модель думает дольше, но реже теряет строки. */
+    val deepThinking: Boolean = false,
 )
 
 sealed interface SaveResult {
@@ -45,6 +47,7 @@ class SettingsRepository(private val store: SecretStore) {
             apiKey = key,
             baseUrl = baseUrl,
             model = store.get(keyModel(preset.id)).orEmpty().ifEmpty { preset.defaultModel },
+            deepThinking = store.get(keyDeepThinking(preset.id)) == "1",
         )
     }
 
@@ -69,6 +72,7 @@ class SettingsRepository(private val store: SecretStore) {
 
         store.put(keyBaseUrl(preset.id), url)
         store.put(keyModel(preset.id), model)
+        store.put(keyDeepThinking(preset.id), if (input.deepThinking) "1" else "0")
         store.put(keyBoundUrl(preset.id), url)
         store.put(keyApiKey(preset.id), key)
         store.put(KEY_ACTIVE_PROVIDER, preset.id)
@@ -134,6 +138,8 @@ class SettingsRepository(private val store: SecretStore) {
     private fun keyApiKey(id: String) = "api_key_$id"
     private fun keyBaseUrl(id: String) = "base_url_$id"
     private fun keyModel(id: String) = "model_$id"
+
+    private fun keyDeepThinking(id: String) = "deep_thinking_$id"
     private fun keyBoundUrl(id: String) = "key_bound_url_$id"
 
     private companion object {

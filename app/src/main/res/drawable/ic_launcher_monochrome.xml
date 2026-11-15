@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Монохромный слой для тематических иконок Android 13+: система красит его
+  своим цветом. Поэтому здесь силуэт линией — заливка слилась бы с фоном
+  и внутренние строки пропали бы. Обводка 2.6 добавляет по 1.3 dp к габаритам,
+  поэтому контур тоже держится внутри круга 66 dp.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="2.6"
+        android:strokeLineJoin="round"
+        android:pathData="M38.6,31 H69.4 A2.6,2.6 0 0 1 72,33.6 V73.3 L69.3,77.5 L66.6,73.3 L63.9,77.5 L61.2,73.3 L58.5,77.5 L55.8,73.3 L53.1,77.5 L50.4,73.3 L47.7,77.5 L45,73.3 L42.3,77.5 L39.6,73.3 L36.9,77.5 L36,73.3 V33.6 A2.6,2.6 0 0 1 38.6,31 Z" />
+
+    <path
+        android:fillColor="#000000"
+        android:pathData="M39,43.6 H48 V46.4 H39 Z M66.5,43.6 H69 V46.4 H66.5 Z" />
+
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="4.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M42.8,60.2 L48.8,66.2 L62,52.6" />
+</vector>

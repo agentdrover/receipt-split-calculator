@@ -180,3 +180,27 @@ data class ReceiptDraft(
         )
     }
 }
+
+
+/**
+ * Что изменилось после глубокого распознавания: сколько позиций добавилось
+ * и как поехало расхождение с итогом. Одной строкой, чтобы человек не
+ * сравнивал два экрана глазами.
+ */
+fun deepRecognizeSummary(before: ReceiptDraft, after: ReceiptDraft): String {
+    val added = after.items.size - before.items.size
+    val residualBefore = before.residualKopecks
+    val residualAfter = after.residualKopecks
+    val items = when {
+        added > 0 -> "добавлено позиций: $added"
+        added < 0 -> "позиций стало меньше на ${-added}"
+        else -> "позиций столько же"
+    }
+    return if (residualBefore == residualAfter) {
+        "$items; расхождение с итогом не изменилось"
+    } else {
+        val was = Money.format(residualBefore, before.currency)
+        val now = Money.format(residualAfter, after.currency)
+        "$items; расхождение: было $was, стало $now"
+    }
+}

@@ -75,7 +75,12 @@ class RecognitionClient(
         http.connectionPool.evictAll()
     }
 
-    suspend fun recognize(image: ByteArray, settings: ProviderSettings): RecognitionResult {
+    suspend fun recognize(
+        image: ByteArray,
+        settings: ProviderSettings,
+        // Принудительно глубокий разбор: кнопка «Распознать точнее» на проверке.
+        forceDeepThinking: Boolean = false,
+    ): RecognitionResult {
         require(isSecure(settings.baseUrl)) { "нужен https-адрес" }
         require(settings.apiKey.isNotBlank()) { "не задан ключ" }
         require(settings.model.isNotBlank()) { "не задана модель" }
@@ -83,7 +88,12 @@ class RecognitionClient(
         var lastFailure: RecognitionResult.Failure? = null
         var thinkingAttempted = false
         for (attempt in 1..attempts) {
-            val exchange = exchange(image, settings, allowThinking = !thinkingAttempted)
+            val exchange = exchange(
+                image = image,
+                settings = settings,
+                allowThinking = !thinkingAttempted,
+                forceDeepThinking = forceDeepThinking,
+            )
             thinkingAttempted = thinkingAttempted || exchange.thinkingAttempted
             when (val result = exchange.result) {
                 is RecognitionResult.Success -> return result.copy(attempts = attempt)
@@ -110,7 +120,18 @@ class RecognitionClient(
         image: ByteArray,
         settings: ProviderSettings,
         allowThinking: Boolean,
+        forceDeepThinking: Boolean = false,
     ): Exchange {
+        // Глубокий режим — явный выбор человека (настройка или кнопка на
+        // проверке): вместо двух быстрых прогонов сразу один с размышлением.
+        // Флаг меняет тело запроса только у официального DeepSeek: у чужого
+        // хоста поле не добавляется, и отключать из-за него повтор нельзя.
+        if ((forceDeepThinking || settings.deepThinking) && disablesThinking(settings.baseUrl)) {
+            return Exchange(
+                call(image, settings, disableThinking = false),
+                thinkingAttempted = true,
+            )
+        }
         if (!doubleSample(settings.baseUrl)) {
             return Exchange(
                 call(image, settings, disableThinking = disablesThinking(settings.baseUrl)),
