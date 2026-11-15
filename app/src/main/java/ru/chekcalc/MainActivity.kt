@@ -32,6 +32,7 @@ import ru.chekcalc.api.RecognitionResult
 import ru.chekcalc.storage.EncryptedSecretStore
 import ru.chekcalc.storage.SettingsRepository
 import ru.chekcalc.ui.ChekCalcTheme
+import ru.chekcalc.ui.home.HomeScreen
 import ru.chekcalc.ui.import.PhotoImportScreen
 import ru.chekcalc.ui.manual.ManualEntryScreen
 import ru.chekcalc.ui.manual.ManualReceipt
@@ -260,44 +261,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeScreen(
-    lastReceipt: Receipt?,
-    onImport: () -> Unit,
-    onManual: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
-        Column(modifier = Modifier.padding(inner).padding(22.dp)) {
-            Text("Расчёт по чеку", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "Сфотографируйте чек — приложение найдёт позиции и посчитает вашу часть.",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp, bottom = 20.dp),
-            )
-            lastReceipt?.let { receipt ->
-                Text(
-                    "Распознан чек: ${receipt.items.size} поз., итог ${receipt.total} ${receipt.currency}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(bottom = 16.dp),
-                )
-            }
-            Button(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
-                Text("Загрузить чек")
-            }
-            OutlinedButton(
-                onClick = onManual,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            ) {
-                Text("Ввести вручную")
-            }
-            Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
-                Text("Настройки")
             }
         }
     }
