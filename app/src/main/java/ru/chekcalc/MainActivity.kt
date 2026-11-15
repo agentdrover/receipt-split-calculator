@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val screen = Screen.valueOf(screenName)
 
-                pendingDeepJson?.let { pending ->
+                if (!reviewEditing) pendingDeepJson?.let { pending ->
                     AlertDialog(
                         onDismissRequest = {
                             pendingDeepJson = null
@@ -326,9 +326,15 @@ class MainActivity : ComponentActivity() {
                                                             fresh,
                                                         )
                                                         if (reviewEditing) {
-                                                            // Открыт редактор: замена сдвинула бы id строк.
+                                                            // Открыт редактор: замена сдвинула бы id строк,
+                                                            // но результат уже оплачен — откладываем его.
+                                                            pendingDeepJson = freshJson
+                                                            pendingDeepBeforeJson = receiptJson.encodeToString(
+                                                                ReceiptDraft.serializer(),
+                                                                before,
+                                                            )
                                                             deepSummary =
-                                                                "Результат готов, но открыт редактор — закройте и нажмите ещё раз"
+                                                                "Результат готов — закройте редактор и подтвердите замену"
                                                         } else if (draftJson != startedJson) {
                                                             // Правки во время запроса не стираем молча.
                                                             pendingDeepJson = freshJson
