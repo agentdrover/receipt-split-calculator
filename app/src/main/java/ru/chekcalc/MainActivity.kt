@@ -157,16 +157,25 @@ class MainActivity : ComponentActivity() {
                         confirmButton = {
                             TextButton(onClick = {
                                 draftJson = pending
-                                pendingDeepJson = null
                                 val fresh = runCatching {
                                     receiptJson.decodeFromString<ReceiptDraft>(pending)
                                 }.getOrNull()
-                                deepSummary = fresh?.let { "Результат глубокого разбора применён" }
+                                val before = pendingDeepBeforeJson?.let {
+                                    runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
+                                }
+                                deepSummary = if (fresh != null && before != null) {
+                                    deepRecognizeSummary(before, fresh)
+                                } else {
+                                    "Результат глубокого разбора применён"
+                                }
+                                pendingDeepJson = null
+                                pendingDeepBeforeJson = null
                             }) { Text("Заменить") }
                         },
                         dismissButton = {
                             TextButton(onClick = {
                                 pendingDeepJson = null
+                                pendingDeepBeforeJson = null
                                 deepSummary = "Оставили ваши правки"
                             }) { Text("Оставить") }
                         },
