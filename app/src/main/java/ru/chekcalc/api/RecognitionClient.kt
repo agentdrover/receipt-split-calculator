@@ -124,7 +124,9 @@ class RecognitionClient(
     ): Exchange {
         // Глубокий режим — явный выбор человека (настройка или кнопка на
         // проверке): вместо двух быстрых прогонов сразу один с размышлением.
-        if (forceDeepThinking || settings.deepThinking) {
+        // Флаг меняет тело запроса только у официального DeepSeek: у чужого
+        // хоста поле не добавляется, и отключать из-за него повтор нельзя.
+        if ((forceDeepThinking || settings.deepThinking) && disablesThinking(settings.baseUrl)) {
             return Exchange(
                 call(image, settings, disableThinking = false),
                 thinkingAttempted = true,

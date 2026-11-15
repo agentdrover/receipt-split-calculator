@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
                 var pendingDeepJson by rememberSaveable { mutableStateOf<String?>(null) }
                 var pendingDeepBeforeJson by rememberSaveable { mutableStateOf<String?>(null) }
                 var reviewEditing by remember { mutableStateOf(false) }
+                var deepJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
                 var manualJson by rememberSaveable { mutableStateOf<String?>(null) }
                 val manualDraft = manualJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
@@ -215,6 +216,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onRecognized = { receipt, photoBytes ->
+                                // Новый чек — новая история: чужая сводка не про него.
+                                deepSummary = null
+                                pendingDeepJson = null
+                                pendingDeepBeforeJson = null
                                 reviewPhoto.set(photoBytes)
                                 checkSessionId = UUID.randomUUID().toString()
                                 lastReceiptJson = receiptJson.encodeToString(Receipt.serializer(), receipt)
@@ -280,6 +285,11 @@ class MainActivity : ComponentActivity() {
                                         screenName = Screen.SELECT.name
                                     },
                                     onBack = {
+                                        // Уход с экрана отменяет запрос: иначе флаг
+                                        // deepBusy держал бы «Дальше» на следующем чеке.
+                                        deepJob?.cancel()
+                                        deepJob = null
+                                        deepBusy = false
                                         reviewPhoto.clear()
                                         deepSummary = null
                                         pendingDeepJson = null
@@ -301,7 +311,7 @@ class MainActivity : ComponentActivity() {
                                             val startedJson = draftJson
                                             deepBusy = true
                                             deepSummary = null
-                                            scope.launch {
+                                            deepJob = scope.launch {
                                                 val settings = repository.load()
                                                 val result = withContext(Dispatchers.IO) {
                                                     recognition.recognize(
@@ -401,6 +411,12 @@ class MainActivity : ComponentActivity() {
                                         payerStore.save(updated)
                                     },
                                     onDone = {
+                                        deepSummary = null
+                                        pendingDeepJson = null
+                                        pendingDeepBeforeJson = null
+                                        deepBusy = false
+                                        deepJob?.cancel()
+                                        deepJob = null
                                         // Расчёт завершён: записываем его в историю,
                                         // затем чистим сессию.
                                         val finishedDraft = draft
