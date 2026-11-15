@@ -158,4 +158,82 @@ class ShareCalculatorTest {
             ShareCalculator.calculate(input)
         }
     }
+
+    @Test
+    fun `границы скидки по сумме позиций`() {
+        val line = CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 1)
+
+        // 0 и «на копейку меньше» проходят, 100 % проходит, на копейку больше — нет.
+        ShareCalculator.calculate(CalcInput(lines = listOf(line), discountKopecks = 0))
+        ShareCalculator.calculate(CalcInput(lines = listOf(line), discountKopecks = 99_999))
+        ShareCalculator.calculate(CalcInput(lines = listOf(line), discountKopecks = 100_000))
+        assertThrows(IllegalArgumentException::class.java) {
+            ShareCalculator.calculate(CalcInput(lines = listOf(line), discountKopecks = 100_001))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ShareCalculator.calculate(CalcInput(lines = listOf(line), discountKopecks = -1))
+        }
+    }
+
+    @Test
+    fun `полная скидка с обслуживанием не обнуляет обслуживание`() {
+        val input = CalcInput(
+            lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 2)),
+            discountKopecks = 100_000,
+            serviceKopecks = 10_000,
+        )
+
+        assertEquals(5_000, ShareCalculator.calculate(input).totalKopecks)
+    }
+
+    @Test
+    fun `полная скидка без обслуживания и чаевых даёт ноль`() {
+        val input = CalcInput(
+            lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 1)),
+            discountKopecks = 100_000,
+        )
+
+        assertEquals(0, ShareCalculator.calculate(input).totalKopecks)
+    }
+
+    @Test
+    fun `недопустимые входы отклоняются во всех точках расчёта`() {
+        val lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 1))
+        val badInputs = listOf(
+            CalcInput(lines = lines, discountKopecks = 120_000),
+            CalcInput(lines = lines, serviceKopecks = -1),
+            CalcInput(lines = lines, tipKopecks = -1),
+            CalcInput(lines = emptyList(), serviceKopecks = 1),
+            CalcInput(lines = emptyList(), tipKopecks = 1),
+        )
+
+        for (input in badInputs) {
+            assertThrows(IllegalArgumentException::class.java) { ShareCalculator.calculate(input) }
+            assertThrows(IllegalArgumentException::class.java) { ShareCalculator.calculate(input, roundToRuble = false) }
+            assertThrows(IllegalArgumentException::class.java) { ShareCalculator.totalExact(input) }
+            assertThrows(IllegalArgumentException::class.java) { ShareCalculator.totalWithPercentTip(input, 10) }
+        }
+    }
+
+    @Test
+    fun `доля больше единицы не создаётся`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            CalcLine(amountKopecks = 100, shareNumerator = 3, shareDenominator = 2)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CalcLine(amountKopecks = -1)
+        }
+    }
+
+    @Test
+    fun `переполнение суммы позиций отклоняется`() {
+        val input = CalcInput(
+            lines = listOf(
+                CalcLine(amountKopecks = Long.MAX_VALUE, shareNumerator = 1, shareDenominator = 1),
+                CalcLine(amountKopecks = Long.MAX_VALUE, shareNumerator = 1, shareDenominator = 1),
+            ),
+        )
+
+        assertThrows(IllegalArgumentException::class.java) { ShareCalculator.calculate(input) }
+    }
 }

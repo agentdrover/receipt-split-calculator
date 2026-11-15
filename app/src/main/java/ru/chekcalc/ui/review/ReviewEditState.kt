@@ -53,6 +53,7 @@ data class TotalsEditState(
     val totalText: String = "",
     val discountText: String = "",
     val serviceText: String = "",
+    val itemsSumKopecks: Long = 0,
 ) {
     val total: Long? get() = parseRubles(totalText)
 
@@ -60,9 +61,13 @@ data class TotalsEditState(
 
     val service: Long? get() = parseRubles(serviceText)
 
-    val valid: Boolean get() = total != null && discount != null && service != null
+    /** Скидка не может превышать сумму позиций; ровно 100 % — допустимо. */
+    val discountTooBig: Boolean get() = (discount ?: 0) > itemsSumKopecks
+
+    val valid: Boolean get() = total != null && discount != null && service != null && !discountTooBig
 
     fun apply(draft: ReceiptDraft): ReceiptDraft {
+        if (!valid) return draft
         val t = total ?: return draft
         val d = discount ?: return draft
         val s = service ?: return draft
@@ -74,6 +79,7 @@ data class TotalsEditState(
             totalText = rublesText(draft.totalKopecks),
             discountText = rublesText(draft.discountKopecks),
             serviceText = rublesText(draft.serviceKopecks),
+            itemsSumKopecks = draft.itemsSumKopecks,
         )
     }
 }

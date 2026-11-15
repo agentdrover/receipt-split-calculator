@@ -51,8 +51,26 @@ data class ReceiptDraft(
 
     val residualOk: Boolean get() = abs(residualKopecks) <= RESIDUAL_TOLERANCE_KOPECKS
 
-    /** «Дальше» не блокируется расхождением — предупреждение просто остаётся. */
-    val canProceed: Boolean get() = true
+    /**
+     * Невозможные данные — блокируют «Дальше» и игнорируют расхождение.
+     *
+     * Это не то же самое, что расхождение OCR: пропущенная строка объясняется
+     * предупреждением и правится, а отрицательная скидка или обслуживание без
+     * позиций — ошибка ввода, с которой считать нельзя.
+     */
+    val blockingError: String?
+        get() = when {
+            items.isEmpty() -> "В чеке нет ни одной позиции — добавьте строку или исправьте чек"
+            discountKopecks < 0 || serviceKopecks < 0 || totalKopecks < 0 ->
+                "Суммы не могут быть отрицательными — исправьте"
+            discountKopecks > itemsSumKopecks -> "Скидка больше суммы позиций — исправьте"
+            itemsSumKopecks == 0L && serviceKopecks > 0 ->
+                "Обслуживание без позиций — исправьте"
+            else -> null
+        }
+
+    /** «Дальше» блокируется только невозможными данными, не расхождением OCR. */
+    val canProceed: Boolean get() = blockingError == null
 
     fun rename(id: Long, name: String): ReceiptDraft =
         copy(items = items.map { if (it.id == id) it.copy(name = name) else it })
@@ -146,8 +164,17 @@ data class ReceiptDraft(
 
         fun fromReceipt(receipt: Receipt): ReceiptDraft = ReceiptDraft(
             items = receipt.items.mapIndexed { index, item -> draftItemFor(index + 1L, item) },
-            discountKopecks = rublesToKopecks(receipt.discount.amount),
-            serviceKopecks = rublesToKopecks(receipt.serviceCharge.amount),
+            // Как и RecognitionClient: сумма без present — это ноль, а не скидка.
+            discountKopecks = if (receipt.discount.present) {
+                rublesToKopecks(receipt.discount.amount)
+            } else {
+                0
+            },
+            serviceKopecks = if (receipt.serviceCharge.present) {
+                rublesToKopecks(receipt.serviceCharge.amount)
+            } else {
+                0
+            },
             totalKopecks = rublesToKopecks(receipt.total),
             currency = receipt.currency,
         )

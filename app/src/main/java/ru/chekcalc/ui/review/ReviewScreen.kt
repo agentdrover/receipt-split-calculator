@@ -142,8 +142,13 @@ fun ReviewScreen(
                 )
             }
 
-            draft.residualWarning()?.let { warning ->
-                item(key = "warning") { ResidualWarning(text = warning) }
+            draft.blockingError?.let { error ->
+                item(key = "blocking") { ResidualWarning(text = error, blocking = true) }
+            }
+            if (draft.blockingError == null) {
+                draft.residualWarning()?.let { warning ->
+                    item(key = "warning") { ResidualWarning(text = warning) }
+                }
             }
 
             item(key = "items") {
@@ -161,7 +166,7 @@ fun ReviewScreen(
             }
         }
 
-        PrimaryNextButton(onClick = onNext)
+        PrimaryNextButton(onClick = onNext, enabled = draft.canProceed)
     }
 
     if (viewerOpen && photo != null) {
@@ -322,7 +327,7 @@ private fun ItemRow(item: DraftItem, currency: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ResidualWarning(text: String) {
+private fun ResidualWarning(text: String, blocking: Boolean = false) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
@@ -336,9 +341,10 @@ private fun ResidualWarning(text: String) {
 }
 
 @Composable
-private fun PrimaryNextButton(onClick: () -> Unit) {
+private fun PrimaryNextButton(onClick: () -> Unit, enabled: Boolean = true) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(26.dp),
         contentPadding = PaddingValues(horizontal = 22.dp),
         modifier = Modifier
@@ -615,6 +621,14 @@ private fun TotalsEditSheet(
                     modifier = Modifier.weight(1f),
                 )
             }
+            if (state.discountTooBig) {
+                Text(
+                    text = "Скидка больше суммы позиций — исправьте",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
             Button(
                 onClick = { onSave(state) },
                 enabled = state.valid,
@@ -736,8 +750,8 @@ private val ItemEditStateSaver = listSaver<ItemEditState, String>(
 
 /** Сохранение открытого листа «Итог чека». */
 private val TotalsEditStateSaver = listSaver<TotalsEditState, String>(
-    save = { listOf(it.totalText, it.discountText, it.serviceText) },
-    restore = { values -> TotalsEditState(values[0], values[1], values[2]) },
+    save = { listOf(it.totalText, it.discountText, it.serviceText, it.itemsSumKopecks.toString()) },
+    restore = { values -> TotalsEditState(values[0], values[1], values[2], values[3].toLong()) },
 )
 
 /** Сохранение масштаба и сдвига фото: список float-ов переживает поворот. */

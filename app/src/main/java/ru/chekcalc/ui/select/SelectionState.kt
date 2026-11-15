@@ -91,6 +91,15 @@ data class SelectionState(
             .setScale(0, RoundingMode.HALF_UP)
             .toLong()
 
+    /**
+     * Восстановленное состояние (смерть процесса, старая версия) могло
+     * сохранить скидку больше позиций. Считать с ней нельзя — ядро бросит
+     * исключение, — поэтому для расчёта скидку подрезаем до 100 %. Экран
+     * проверки такой черновик дальше не пустит.
+     */
+    private val safeDiscountKopecks: Long
+        get() = discountKopecks.coerceIn(0, lines().sumOf { it.amountKopecks })
+
     private val breakdown: ru.chekcalc.calc.Breakdown
         get() = ShareCalculator.calculate(baseInput(), roundToRuble = false)
 
@@ -105,7 +114,7 @@ data class SelectionState(
         get() = ShareCalculator.totalExact(
             CalcInput(
                 lines = lines(),
-                discountKopecks = discountKopecks,
+                discountKopecks = safeDiscountKopecks,
                 serviceKopecks = serviceKopecks,
             ),
         )
@@ -115,7 +124,7 @@ data class SelectionState(
         get() = ShareCalculator.calculate(
             CalcInput(
                 lines = lines(),
-                discountKopecks = discountKopecks,
+                discountKopecks = safeDiscountKopecks,
                 serviceKopecks = serviceKopecks,
             ),
         ).totalKopecks
@@ -154,7 +163,7 @@ data class SelectionState(
 
     private fun baseInput() = CalcInput(
         lines = lines(),
-        discountKopecks = discountKopecks,
+        discountKopecks = safeDiscountKopecks,
         serviceKopecks = serviceKopecks,
     )
 
