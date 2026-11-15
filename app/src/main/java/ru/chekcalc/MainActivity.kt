@@ -231,10 +231,9 @@ class MainActivity : ComponentActivity() {
                                             updated,
                                         )
                                     },
-                                    // Экран итога появится в #2298.
                                     onNext = {
-                                        // Сессия проверки закончена — фото больше не нужно.
-                                        reviewPhoto.clear()
+                                        // Расчёт завершён: сохраняем в историю и
+                                        // показываем итог, ничего не пересчитывая.
                                         val finishedDraft = draft
                                         if (finishedDraft != null) {
                                             historyModel.save(
@@ -248,7 +247,11 @@ class MainActivity : ComponentActivity() {
                                                 ),
                                             )
                                         }
-                                        screenName = Screen.HOME.name
+                                        summaryJson = receiptJson.encodeToString(
+                                            ReceiptSummary.serializer(),
+                                            ReceiptSummary.from(current),
+                                        )
+                                        screenName = Screen.SUMMARY.name
                                     },
                                     onBack = { screenName = Screen.REVIEW.name },
                                 )
@@ -268,6 +271,8 @@ class MainActivity : ComponentActivity() {
                                         payerStore.save(updated)
                                     },
                                     onDone = {
+                                        // Сессия проверки закончена — фото больше не нужно.
+                                        reviewPhoto.clear()
                                         screenName = Screen.HOME.name
                                         lastReceiptJson = null
                                         draftJson = null
