@@ -53,7 +53,8 @@ data class TotalsEditState(
     val totalText: String = "",
     val discountText: String = "",
     val serviceText: String = "",
-    val itemsSumKopecks: Long = 0,
+    /** Сумма позиций; null — состояние прежней версии, сверять не с чем. */
+    val itemsSumKopecks: Long? = null,
 ) {
     val total: Long? get() = parseRubles(totalText)
 
@@ -62,7 +63,8 @@ data class TotalsEditState(
     val service: Long? get() = parseRubles(serviceText)
 
     /** Скидка не может превышать сумму позиций; ровно 100 % — допустимо. */
-    val discountTooBig: Boolean get() = (discount ?: 0) > itemsSumKopecks
+    val discountTooBig: Boolean
+        get() = itemsSumKopecks?.let { (discount ?: 0) > it } ?: false
 
     val valid: Boolean get() = total != null && discount != null && service != null && !discountTooBig
 

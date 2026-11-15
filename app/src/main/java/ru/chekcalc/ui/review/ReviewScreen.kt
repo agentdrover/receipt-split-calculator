@@ -750,14 +750,18 @@ private val ItemEditStateSaver = listSaver<ItemEditState, String>(
 
 /** Сохранение открытого листа «Итог чека». */
 private val TotalsEditStateSaver = listSaver<TotalsEditState, String>(
-    save = { listOf(it.totalText, it.discountText, it.serviceText, it.itemsSumKopecks.toString()) },
+    save = {
+        listOf(it.totalText, it.discountText, it.serviceText, it.itemsSumKopecks?.toString().orEmpty())
+    },
     // Три строки — состояние прежних версий: сумма позиций тогда не сохранялась.
     restore = { values ->
         TotalsEditState(
             totalText = values[0],
             discountText = values[1],
             serviceText = values[2],
-            itemsSumKopecks = values.getOrNull(3)?.toLongOrNull() ?: 0L,
+            // Пустая строка — состояние прежней версии: суммy позиций
+            // восстановить не из чего, а нулём её считать нельзя.
+            itemsSumKopecks = values.getOrNull(3)?.toLongOrNull(),
         )
     },
 )

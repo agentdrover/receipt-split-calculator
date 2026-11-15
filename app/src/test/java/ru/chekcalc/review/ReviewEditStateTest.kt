@@ -135,4 +135,17 @@ class ReviewEditStateTest {
 
         assertEquals(draft, state.apply(draft))
     }
+
+    @Test
+    fun `старое состояние без суммы позиций не блокирует скидку`() {
+        val state = TotalsEditState(
+            totalText = "1000",
+            discountText = "200",
+            serviceText = "0",
+            itemsSumKopecks = null,
+        )
+
+        assertTrue(state.valid)
+        assertTrue(!state.discountTooBig)
+    }
 }
