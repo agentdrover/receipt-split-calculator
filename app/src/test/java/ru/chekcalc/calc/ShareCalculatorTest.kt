@@ -1,6 +1,7 @@
 package ru.chekcalc.calc
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -144,5 +145,17 @@ class ShareCalculatorTest {
     fun `residual считает расхождение с итогом чека`() {
         assertEquals(0, ShareCalculator.residualKopecks(249_500, 252_000, 25_200, 22_700))
         assertEquals(5_000, ShareCalculator.residualKopecks(249_500, 247_000, 25_200, 22_700))
+    }
+
+    @Test
+    fun `скидка больше суммы позиций отклоняется`() {
+        val input = CalcInput(
+            lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 2)),
+            discountKopecks = 120_000,
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            ShareCalculator.calculate(input)
+        }
     }
 }
