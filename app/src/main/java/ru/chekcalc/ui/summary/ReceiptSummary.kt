@@ -25,11 +25,11 @@ data class ReceiptSummary(
 ) {
     /** Строки разбивки: подпись и сумма; пустые строки не показываем. */
     fun lines(): List<Pair<String, String>> = buildList {
-        add("Ваши позиции" to Money.format(itemsShareKopecks))
-        if (discountKopecks > 0) add("Скидка" to "−" + Money.format(discountKopecks))
-        if (serviceKopecks > 0) add("Обслуживание" to Money.format(serviceKopecks))
-        if (tipKopecks > 0) add("Чаевые" to Money.format(tipKopecks))
-        add("Итого" to Money.format(totalKopecks))
+        add("Ваши позиции" to Money.format(itemsShareKopecks, currency))
+        if (discountKopecks > 0) add("Скидка" to "−" + Money.format(discountKopecks, currency))
+        if (serviceKopecks > 0) add("Обслуживание" to Money.format(serviceKopecks, currency))
+        if (tipKopecks > 0) add("Чаевые" to Money.format(tipKopecks, currency))
+        add("Итого" to Money.format(totalKopecks, currency))
     }
 
     /**
@@ -45,9 +45,9 @@ data class ReceiptSummary(
             for ((label, value) in rows) {
                 appendLine("$label: $value")
             }
-            append("Итого к переводу: ${Money.format(totalKopecks)}")
+            // Итог уже есть строкой выше: вторая такая же сумма — шум (#2327).
             val who = payer.display()
-            if (who.isNotBlank()) append("\nПеревод на $who")
+            if (who.isNotBlank()) append("Перевод на $who")
         }
     }
 
@@ -58,6 +58,7 @@ data class ReceiptSummary(
             serviceKopecks = state.serviceShareKopecks,
             tipKopecks = state.tipKopecks,
             totalKopecks = state.totalKopecks,
+            currency = state.currency,
             ownItems = state.items.count { it.choice == Choice.Whole },
             sharedItems = state.items.count { it.choice is Choice.Shared },
         )

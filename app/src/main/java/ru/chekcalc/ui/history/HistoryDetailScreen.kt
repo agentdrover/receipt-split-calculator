@@ -82,6 +82,7 @@ fun HistoryDetailScreen(entry: HistoryEntry, onBack: () -> Unit) {
                     ItemRow(
                         item = item,
                         choice = choices[item.id]?.choice,
+                        currency = entry.draft.currency,
                     )
                 }
             }
@@ -97,20 +98,20 @@ private fun TotalsCard(entry: HistoryEntry) {
             .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surface),
     ) {
-        RowValue("Итог чека", formatKopecks(entry.draft.totalKopecks))
+        RowValue("Итог чека", formatKopecks(entry.draft.totalKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Скидка", formatKopecks(entry.draft.discountKopecks))
+        RowValue("Скидка", formatKopecks(entry.draft.discountKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Обслуживание", formatKopecks(entry.draft.serviceKopecks))
+        RowValue("Обслуживание", formatKopecks(entry.draft.serviceKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Чаевые", formatKopecks(entry.selection.tipKopecks))
+        RowValue("Чаевые", formatKopecks(entry.selection.tipKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Ваша часть", formatKopecks(entry.myShareKopecks), bold = true)
+        RowValue("Ваша часть", formatKopecks(entry.myShareKopecks, entry.draft.currency), bold = true)
     }
 }
 
 @Composable
-private fun ItemRow(item: DraftItem, choice: Choice?) {
+private fun ItemRow(item: DraftItem, choice: Choice?, currency: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -123,7 +124,7 @@ private fun ItemRow(item: DraftItem, choice: Choice?) {
                 text = buildString {
                     append(item.qtyText())
                     append(" × ")
-                    append(formatKopecks(item.unitPriceKopecks))
+                    append(formatKopecks(item.unitPriceKopecks, currency))
                     if (choice != null) {
                         append(" · ")
                         append(choiceLabel(choice))
@@ -135,7 +136,7 @@ private fun ItemRow(item: DraftItem, choice: Choice?) {
             )
         }
         Text(
-            text = formatKopecks(item.amountKopecks),
+            text = formatKopecks(item.amountKopecks, currency),
             style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
             modifier = Modifier.padding(start = 12.dp),
         )
