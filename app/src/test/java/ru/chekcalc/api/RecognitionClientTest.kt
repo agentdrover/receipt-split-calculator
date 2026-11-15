@@ -248,3 +248,56 @@ class RecognitionClientTest {
         assertFalse(without.contains("thinking"))
     }
 }
+
+// Глубокий разбор: флаг в теле запроса и его источник в настройках.
+private class MemorySecretStore : ru.chekcalc.storage.SecretStore {
+    private val values = mutableMapOf<String, String>()
+    override fun get(key: String): String? = values[key]
+    override fun put(key: String, value: String) { values[key] = value }
+    override fun remove(key: String) { values.remove(key) }
+}
+
+class DeepThinkingTest {
+
+    @Test
+    fun `по умолчанию размышление отключено для DeepSeek`() {
+        val body = RecognitionClient().buildJsonObject(
+            model = "deepseek-flash",
+            dataUrl = "data:image/jpeg;base64,AA==",
+            disableThinking = true,
+        )
+
+        assertTrue(body.contains("\"thinking\":{\"type\":\"disabled\"}"))
+    }
+
+    @Test
+    fun `в глубоком режиме флага disabled нет`() {
+        val body = RecognitionClient().buildJsonObject(
+            model = "deepseek-flash",
+            dataUrl = "data:image/jpeg;base64,AA==",
+            disableThinking = false,
+        )
+
+        assertFalse(body.contains("\"disabled\""))
+    }
+
+    @Test
+    fun `настройка по умолчанию выключена и сохраняется`() {
+        val store = MemorySecretStore()
+        val repository = ru.chekcalc.storage.SettingsRepository(store)
+
+        assertFalse(repository.load().deepThinking)
+
+        val saved = repository.save(
+            ru.chekcalc.storage.ProviderSettings(
+                providerId = "deepseek",
+                apiKey = "sk-test",
+                baseUrl = "https://api.deepseek.com",
+                model = "deepseek-flash",
+                deepThinking = true,
+            ),
+        )
+        assertTrue(saved is ru.chekcalc.storage.SaveResult.Saved)
+        assertTrue(repository.load().deepThinking)
+    }
+}

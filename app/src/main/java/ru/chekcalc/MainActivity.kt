@@ -20,11 +20,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.util.UUID
 import ru.chekcalc.api.RecognitionClient
@@ -45,6 +49,7 @@ import ru.chekcalc.ui.manual.ManualReceipt
 import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.ReviewPhotoViewModel
 import ru.chekcalc.ui.review.ReviewScreen
+import ru.chekcalc.ui.review.deepRecognizeSummary
 import ru.chekcalc.ui.select.SelectionScreen
 import ru.chekcalc.storage.Payer
 import ru.chekcalc.storage.PayerStore
@@ -112,6 +117,10 @@ class MainActivity : ComponentActivity() {
                     runCatching { receiptJson.decodeFromString<SelectionState>(it) }.getOrNull()
                 }
                 // Форма ручного ввода тоже переживает поворот экрана.
+                val scope = rememberCoroutineScope()
+                // Глубокий разбор: состояние кнопки на экране проверки.
+                var deepBusy by rememberSaveable { mutableStateOf(false) }
+                var deepSummary by rememberSaveable { mutableStateOf<String?>(null) }
                 var manualJson by rememberSaveable { mutableStateOf<String?>(null) }
                 val manualDraft = manualJson?.let {
                     runCatching { receiptJson.decodeFromString<ReceiptDraft>(it) }.getOrNull()
@@ -216,6 +225,40 @@ class MainActivity : ComponentActivity() {
                                         screenName = Screen.HOME.name
                                     },
                                     photo = reviewPhoto.photo,
+                                    deepBusy = deepBusy,
+                                    deepSummary = deepSummary,
+                                    onDeepRecognize = {
+                                        val bytes = reviewPhoto.photo
+                                        if (bytes != null && !deepBusy) {
+                                            val before = current
+                                            deepBusy = true
+                                            deepSummary = null
+                                            scope.launch {
+                                                val settings = repository.load()
+                                                val result = withContext(Dispatchers.IO) {
+                                                    recognition.recognize(
+                                                        image = bytes,
+                                                        settings = settings,
+                                                        forceDeepThinking = true,
+                                                    )
+                                                }
+                                                deepBusy = false
+                                                when (result) {
+                                                    is RecognitionResult.Success -> {
+                                                        val fresh = ReceiptDraft.fromReceipt(result.receipt)
+                                                        draftJson = receiptJson.encodeToString(
+                                                            ReceiptDraft.serializer(),
+                                                            fresh,
+                                                        )
+                                                        deepSummary = deepRecognizeSummary(before, fresh)
+                                                    }
+                                                    is RecognitionResult.Failure -> {
+                                                        deepSummary = "Не вышло: ${result.message}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
                                 )
                             }
                         }

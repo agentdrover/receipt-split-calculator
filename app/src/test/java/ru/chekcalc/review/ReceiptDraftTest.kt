@@ -7,9 +7,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.chekcalc.model.Discount
 import ru.chekcalc.model.Receipt
+import ru.chekcalc.ui.review.DraftItem
 import ru.chekcalc.model.ReceiptItem
 import ru.chekcalc.model.ServiceCharge
 import ru.chekcalc.ui.review.ReceiptDraft
+import ru.chekcalc.ui.review.deepRecognizeSummary
 
 class ReceiptDraftTest {
 
@@ -267,5 +269,31 @@ class ReceiptDraftTest {
 
         assertEquals("Кофе с молоком", renamed.items.first().name)
         assertEquals(draft.itemsSumKopecks, renamed.itemsSumKopecks)
+    }
+}
+
+// Сводка после глубокого разбора: человек видит выгоду одной строкой.
+class DeepRecognizeSummaryTest {
+
+    private fun draft(vararg amounts: Long, total: Long) = ReceiptDraft(
+        items = amounts.mapIndexed { index, amount -> DraftItem(index + 1L, "Позиция", 1.0, amount) },
+        totalKopecks = total,
+    )
+
+    @Test
+    fun `сводка называет добавленные позиции и улучшение расхождения`() {
+        val before = draft(10_000, 20_000, total = 40_000)
+        val after = draft(10_000, 20_000, 10_000, total = 40_000)
+        val text = deepRecognizeSummary(before, after)
+        assertTrue(text.contains("добавлено позиций: 1"))
+        assertTrue(text.contains("расхождение"))
+    }
+
+    @Test
+    fun `без изменений сводка это говорит`() {
+        val same = draft(10_000, total = 10_000)
+        val text = deepRecognizeSummary(same, same)
+        assertTrue(text.contains("позиций столько же"))
+        assertTrue(text.contains("не изменилось"))
     }
 }

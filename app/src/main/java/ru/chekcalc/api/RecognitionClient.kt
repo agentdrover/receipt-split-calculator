@@ -67,14 +67,19 @@ class RecognitionClient(
         http.connectionPool.evictAll()
     }
 
-    suspend fun recognize(image: ByteArray, settings: ProviderSettings): RecognitionResult {
+    suspend fun recognize(
+        image: ByteArray,
+        settings: ProviderSettings,
+        // Принудительно глубокий разбор: кнопка «Распознать точнее» на проверке.
+        forceDeepThinking: Boolean = false,
+    ): RecognitionResult {
         require(isSecure(settings.baseUrl)) { "нужен https-адрес" }
         require(settings.apiKey.isNotBlank()) { "не задан ключ" }
         require(settings.model.isNotBlank()) { "не задана модель" }
 
         var lastFailure: RecognitionResult.Failure? = null
         for (attempt in 1..attempts) {
-            when (val result = call(image, settings)) {
+            when (val result = call(image, settings, forceDeepThinking)) {
                 is RecognitionResult.Success -> return result.copy(attempts = attempt)
                 is RecognitionResult.Failure -> {
                     lastFailure = result
@@ -94,12 +99,16 @@ class RecognitionClient(
      * запроса, включая чтение тела: `invokeOnCancellation` живёт до тех пор,
      * пока продолжение не завершено.
      */
-    private suspend fun call(image: ByteArray, settings: ProviderSettings): RecognitionResult {
+    private suspend fun call(
+        image: ByteArray,
+        settings: ProviderSettings,
+        forceDeepThinking: Boolean,
+    ): RecognitionResult {
         val request = Request.Builder()
             .url(settings.baseUrl.trimEnd('/') + "/chat/completions")
             .header("Authorization", "Bearer ${settings.apiKey}")
             .header("Content-Type", "application/json")
-            .post(buildBody(image, settings).toRequestBody(JSON_MEDIA))
+            .post(buildBody(image, settings, forceDeepThinking).toRequestBody(JSON_MEDIA))
             .build()
 
         return suspendCancellableCoroutine { continuation ->
@@ -207,12 +216,19 @@ class RecognitionClient(
     private fun invalid(message: String) =
         RecognitionResult.Failure(FailureKind.INVALID_RESPONSE, message)
 
-    private fun buildBody(image: ByteArray, settings: ProviderSettings): String {
+    private fun buildBody(
+        image: ByteArray,
+        settings: ProviderSettings,
+        forceDeepThinking: Boolean,
+    ): String {
         val encoded = Base64.getEncoder().encodeToString(image)
+        // Размышление отключаем только там, где провайдер это понимает,
+        // и только если человек сам не попросил глубокий разбор.
+        val fastMode = !settings.deepThinking && !forceDeepThinking
         return buildJsonObject(
             model = settings.model,
             dataUrl = "data:image/jpeg;base64,$encoded",
-            disableThinking = disablesThinking(settings.baseUrl),
+            disableThinking = fastMode && disablesThinking(settings.baseUrl),
         )
     }
 
