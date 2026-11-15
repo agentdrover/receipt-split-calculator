@@ -97,8 +97,15 @@ data class SelectionState(
      * исключение, — поэтому для расчёта скидку подрезаем до 100 %. Экран
      * проверки такой черновик дальше не пустит.
      */
+    private val itemsSumKopecks: Long
+        get() = lines().sumOf { it.amountKopecks }
+
     private val safeDiscountKopecks: Long
-        get() = discountKopecks.coerceIn(0, lines().sumOf { it.amountKopecks })
+        get() = discountKopecks.coerceIn(0, itemsSumKopecks)
+
+    /** Обслуживание без позиций восстановленное состояние не должно ронять экран. */
+    private val safeServiceKopecks: Long
+        get() = if (itemsSumKopecks == 0L) 0L else serviceKopecks
 
     private val breakdown: ru.chekcalc.calc.Breakdown
         get() = ShareCalculator.calculate(baseInput(), roundToRuble = false)
@@ -115,7 +122,7 @@ data class SelectionState(
             CalcInput(
                 lines = lines(),
                 discountKopecks = safeDiscountKopecks,
-                serviceKopecks = serviceKopecks,
+                serviceKopecks = safeServiceKopecks,
             ),
         )
 
@@ -125,7 +132,7 @@ data class SelectionState(
             CalcInput(
                 lines = lines(),
                 discountKopecks = safeDiscountKopecks,
-                serviceKopecks = serviceKopecks,
+                serviceKopecks = safeServiceKopecks,
             ),
         ).totalKopecks
 
@@ -164,7 +171,7 @@ data class SelectionState(
     private fun baseInput() = CalcInput(
         lines = lines(),
         discountKopecks = safeDiscountKopecks,
-        serviceKopecks = serviceKopecks,
+        serviceKopecks = safeServiceKopecks,
     )
 
     private fun lines(): List<CalcLine> = items.map { item ->

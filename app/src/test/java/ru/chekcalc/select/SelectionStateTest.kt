@@ -178,4 +178,21 @@ class SelectionStateTest {
         // Скидка подрезается до 100 %: ядро не бросает, итог не отрицательный.
         assertEquals(0, state.totalKopecks)
     }
+
+    @Test
+    fun `восстановленное обслуживание без позиций не роняет экран`() {
+        val state = SelectionState(
+            items = listOf(
+                ru.chekcalc.ui.select.SelectableItem(
+                    id = 1,
+                    name = "Нулевая строка",
+                    amountKopecks = 0,
+                    choice = Choice.Whole,
+                ),
+            ),
+            serviceKopecks = 10_000,
+        )
+
+        assertEquals(0, state.totalKopecks)
+    }
 }
