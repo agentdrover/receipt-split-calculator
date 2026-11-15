@@ -55,6 +55,30 @@ class ReceiptSummaryTest {
     }
 
     @Test
+    fun `в тексте одна строка итога, без дубля`() {
+        val summary = ReceiptSummary.from(state(SelectableItem(1, "Обед", 78_000, Choice.Whole)))
+
+        val text = summary.shareText()
+
+        assertEquals(1, text.lines().count { it.startsWith("Итого") })
+        assertTrue("Итого к переводу" !in text)
+    }
+
+    @Test
+    fun `чужая валюта не подписывается рублём`() {
+        val selected = SelectionState(
+            items = listOf(SelectableItem(1, "Обед", 17_460_000, Choice.Whole)),
+            currency = "KRW",
+        )
+
+        val summary = ReceiptSummary.from(selected)
+        val text = summary.shareText()
+
+        assertTrue(text.contains("KRW"))
+        assertTrue("₽" !in text)
+    }
+
+    @Test
     fun `текст для шаринга содержит итог`() {
         val summary = ReceiptSummary.from(
             state(SelectableItem(1, "Обед", 78_000, Choice.Whole)),
@@ -63,7 +87,7 @@ class ReceiptSummaryTest {
         val text = summary.shareText()
 
         assertTrue(text.contains("Расчёт по чеку"))
-        assertTrue(text.contains("Итого к переводу: 780 ₽"))
+        assertTrue(text.contains("Итого: 780 ₽"))
     }
 
     @Test

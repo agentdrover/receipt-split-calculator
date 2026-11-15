@@ -97,15 +97,15 @@ private fun TotalsCard(entry: HistoryEntry) {
             .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surface),
     ) {
-        RowValue("Итог чека", formatKopecks(entry.draft.totalKopecks))
+        RowValue("Итог чека", formatKopecks(entry.draft.totalKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Скидка", formatKopecks(entry.draft.discountKopecks))
+        RowValue("Скидка", formatKopecks(entry.draft.discountKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Обслуживание", formatKopecks(entry.draft.serviceKopecks))
+        RowValue("Обслуживание", formatKopecks(entry.draft.serviceKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         RowValue("Чаевые", formatKopecks(entry.selection.tipKopecks))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        RowValue("Ваша часть", formatKopecks(entry.myShareKopecks), bold = true)
+        RowValue("Ваша часть", formatKopecks(entry.myShareKopecks, entry.selection.currency), bold = true)
     }
 }
 

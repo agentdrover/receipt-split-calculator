@@ -43,6 +43,7 @@ data class SelectionState(
     val serviceKopecks: Long = 0,
     val tipPercent: Int? = null,
     val tipFixedKopecks: Long = 0,
+    val currency: String = "RUB",
 ) {
     val denominatorChoices: List<Int> get() = listOf(2, 3, 4, 5, 6)
 
@@ -170,6 +171,7 @@ data class SelectionState(
             items = draft.items.map { SelectableItem(it.id, it.name, it.amountKopecks) },
             discountKopecks = draft.discountKopecks,
             serviceKopecks = draft.serviceKopecks,
+            currency = draft.currency,
         )
     }
 }
