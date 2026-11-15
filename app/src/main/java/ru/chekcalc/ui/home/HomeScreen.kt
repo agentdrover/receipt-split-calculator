@@ -54,6 +54,7 @@ fun HomeScreen(
     onHistory: (() -> Unit)? = null,
     historyCount: Int = 0,
     historyFailure: Boolean = false,
+    historyReadFailure: Boolean = false,
 ) {
     val palette = LocalChekPalette.current
 
@@ -115,7 +116,13 @@ fun HomeScreen(
                 GroupRow(
                     glyph = "◷",
                     title = "История",
-                    subtitle = historyLabel(historyCount),
+                    // «Пока пусто» здесь означало бы, что записей нет; при сбое
+                    // чтения это неправда.
+                    subtitle = if (historyReadFailure) {
+                        "не прочитана — чеки не показаны"
+                    } else {
+                        historyLabel(historyCount)
+                    },
                     onClick = openHistory,
                 )
                 HorizontalDivider(color = palette.line)
@@ -125,6 +132,15 @@ fun HomeScreen(
                 title = "Настройки",
                 subtitle = "провайдер, модель, ключ",
                 onClick = onOpenSettings,
+            )
+        }
+
+        if (historyReadFailure) {
+            Text(
+                text = "История не прочитана: сохранённые чеки не показаны. Откройте историю, чтобы увидеть состояние.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
 
