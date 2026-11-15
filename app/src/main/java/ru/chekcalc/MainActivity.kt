@@ -127,7 +127,9 @@ class MainActivity : ComponentActivity() {
                 var deepSummary by rememberSaveable { mutableStateOf<String?>(null) }
                 // Результат глубокого разбора, ждущий подтверждения: пока он шёл,
                 // человек мог править черновик руками.
-                var pendingDeepJson by remember { mutableStateOf<String?>(null) }
+                // saveable: поворот не должен выбрасывать оплаченный результат.
+                var pendingDeepJson by rememberSaveable { mutableStateOf<String?>(null) }
+                var pendingDeepBeforeJson by rememberSaveable { mutableStateOf<String?>(null) }
                 var reviewEditing by remember { mutableStateOf(false) }
                 var manualJson by rememberSaveable { mutableStateOf<String?>(null) }
                 val manualDraft = manualJson?.let {
@@ -142,6 +144,7 @@ class MainActivity : ComponentActivity() {
                     AlertDialog(
                         onDismissRequest = {
                             pendingDeepJson = null
+                            pendingDeepBeforeJson = null
                             deepSummary = "Оставили ваши правки"
                         },
                         title = { Text("Применить глубокий разбор?") },
@@ -244,7 +247,7 @@ class MainActivity : ComponentActivity() {
                             // у остальных провайдеров кнопка платила бы за пустой повтор.
                             val deepAvailable = remember(current) {
                                 runCatching {
-                                    recognition.disablesThinking(repository.load().baseUrl)
+                                    ru.chekcalc.api.disablesThinking(repository.load().baseUrl)
                                 }.getOrDefault(false)
                             }
                             if (current == null) {
@@ -269,6 +272,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onBack = {
                                         reviewPhoto.clear()
+                                        deepSummary = null
+                                        pendingDeepJson = null
+                                        pendingDeepBeforeJson = null
                                         screenName = Screen.HOME.name
                                     },
                                     photo = reviewPhoto.photo,
@@ -317,6 +323,11 @@ class MainActivity : ComponentActivity() {
                                                         } else if (draftJson != startedJson) {
                                                             // Правки во время запроса не стираем молча.
                                                             pendingDeepJson = freshJson
+                                                            pendingDeepBeforeJson =
+                                                                receiptJson.encodeToString(
+                                                                    ReceiptDraft.serializer(),
+                                                                    before,
+                                                                )
                                                             deepSummary = "Результат готов — подтвердите замену правок"
                                                         } else {
                                                             draftJson = freshJson
