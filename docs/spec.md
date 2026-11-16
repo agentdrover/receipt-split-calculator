@@ -1,7 +1,7 @@
 # «Расчёт по чеку» — спецификация MVP
 
-Версия 0.2 · 12.11.2026 · проект хаба `receipt-split-calculator` (id 17)
-Локальный каталог: `~/my_projects/Check_calc`, репозиторий: `agentdrover/receipt-split-calculator`
+Версия 0.2 · 12.11.2026 · проект `receipt-split-calculator`
+Репозиторий: `agentdrover/receipt-split-calculator`
 
 ---
 
@@ -340,8 +340,8 @@ share-sheet и файлы без прослоек. Решение D1; iOS в э�
 ## 15. Ссылки
 
 - Бриф: `agentdrover/receipt-split-calculator`, `README.md`.
-- Проект хаба: `receipt-split-calculator` (id 17).
-- Спека в хабе: эпик «Расчёт по чеку — MVP Android-приложения».
+- Проект: `receipt-split-calculator`.
+- Оформление репозитория: `docs/spec-repo.md` — правила, проверки, границы.
 - Макет интерфейса: `docs/mockups/interface.png` — шесть экранов MVP (главный,
   распознавание, проверка чека, выбор доли, чаевые, итог). Исходник —
   `docs/mockups/interface.html`.
