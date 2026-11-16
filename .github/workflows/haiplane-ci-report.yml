@@ -25,15 +25,18 @@ jobs:
     timeout-minutes: 10
     environment: hub-report
     steps:
+      # Actions закреплены по SHA: этот job исполняется с ключом записи, и
+      # подмена кода экшена по плавающему тегу дала бы доступ к отчётам.
+      # Обновление — руками: новый SHA, прогон, проверка карточки задачи.
       - name: Checkout default branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
 
       - name: Отправить отчёт
-        uses: agentdrover/haiplane/.github/actions/hub-ci-send@main
+        uses: agentdrover/haiplane/.github/actions/hub-ci-send@625e6f4bfc9796ad53e5c8ff42ed94ecfeccea8a # main, 2026-11-16
         with:
           hub-url: ${{ secrets.HAIPLANE_HUB_URL }}
           hub-token: ${{ secrets.HAIPLANE_HUB_CI_TOKEN }}

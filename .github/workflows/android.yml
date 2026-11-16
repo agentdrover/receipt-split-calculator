@@ -5,29 +5,41 @@
 # результаты AC и validation в hub-ci-results/, артефакт уезжает с прогоном,
 # а сам отчёт отправляет доверенный отправитель из main
 # (.github/workflows/haiplane-ci-report.yml) после завершения этого прогона.
+#
+# Все сторонние actions закреплены по полному SHA с версией в комментарии:
+# плавающий тег позволяет подменить код экшена без изменения этого файла.
 name: android
 
 on:
   pull_request:
   push:
+    # Ветки задач и main. Прогоны на прочих ветках дублируют pull_request.
+    branches: [main, "task-*/**"]
 
 permissions:
   contents: read
 
+# Новый push в ту же ветку отменяет прежний прогон: он уже не актуален.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Стиль, тесты, lint, debug и release APK в одном job: 20 минут прежнего
+    # бюджета не хватало на два новых шага.
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '17'
@@ -36,31 +48,62 @@ jobs:
         run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME/platforms"
 
       - name: Кэш Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3
 
+      # Стиль идёт первым: формат падает за секунды, тесты — за минуты.
+      - name: Стиль Kotlin
+        id: ktlint
+        run: ./gradlew --no-daemon ktlintCheck
+
+      # if: always() на остальных шагах: падение стиля не должно оставлять
+      # отчёт хаба без результатов проверок.
       - name: Тесты
         id: tests
+        if: ${{ always() }}
         run: ./gradlew --no-daemon test
 
       - name: Линтер
         id: lint
+        if: ${{ always() }}
         run: ./gradlew --no-daemon lint
 
       - name: Сборка APK
+        if: ${{ always() }}
         run: ./gradlew --no-daemon assembleDebug
+
+      # Подпись проверяется на эфемерном ключе: он создаётся внутри прогона и
+      # не покидает runner. Секреты владельца для этой проверки не нужны.
+      - name: Release с тестовым ключом
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/ci-release.jks"
+          password="$(openssl rand -hex 16)"
+          export ANDROID_KEYSTORE_PATH="$keystore"
+          export ANDROID_KEYSTORE_PASSWORD="$password"
+          export ANDROID_KEY_ALIAS="ci"
+          export ANDROID_KEY_PASSWORD="$password"
+          keytool -genkeypair -noprompt \
+            -keystore "$keystore" -alias "$ANDROID_KEY_ALIAS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=CI ephemeral, O=receipt-split-calculator"
+          ./gradlew --no-daemon assembleRelease
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort | tail -1)"
+          "$apksigner" verify --print-certs build/outputs/apk/release/chekcalc-release.apk
 
       # Имена проверок должны покрывать required_checks контракта проекта
       # (lint и tests); лишние из словаря хаба не мешают.
       - name: Собрать результаты для хаба
         if: ${{ always() }}
         continue-on-error: true
-        uses: agentdrover/haiplane/.github/actions/hub-ci-report@main
+        uses: agentdrover/haiplane/.github/actions/hub-ci-report@625e6f4bfc9796ad53e5c8ff42ed94ecfeccea8a # main, 2026-11-16
         with:
           hub-url: ${{ secrets.HAIPLANE_HUB_URL }}
           hub-read-token: ${{ secrets.HAIPLANE_HUB_CI_READ_TOKEN }}
           head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
           event-action: ${{ github.event.action }}
-          checks: tests=${{ steps.tests.outcome }},lint=${{ steps.lint.outcome }}
+          checks: ktlint=${{ steps.ktlint.outcome }},tests=${{ steps.tests.outcome }},lint=${{ steps.lint.outcome }}
 
       - name: Загрузить результаты для отправителя
         if: ${{ always() }}
