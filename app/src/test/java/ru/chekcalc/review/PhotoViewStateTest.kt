@@ -6,7 +6,6 @@ import org.junit.Test
 import ru.chekcalc.ui.review.PhotoViewState
 
 class PhotoViewStateTest {
-
     @Test
     fun `щипок увеличивает фото в границах`() {
         assertEquals(2f, PhotoViewState().zoom(2f).scale, 1e-6f)

@@ -15,7 +15,6 @@ import java.math.BigDecimal
  * поэтому перевод сумм собран в одном месте.
  */
 object ManualReceipt {
-
     /** Предел схемы receipt.v1: суммы в рублях не больше миллиарда. */
     const val MAX_AMOUNT_KOPECKS = 100_000_000_000L
 
@@ -23,8 +22,7 @@ object ManualReceipt {
      * Строка, которую человек ещё не заполнил: ни названия, ни денег.
      * Такие строки не попадают в чек и не мешают переходу.
      */
-    private fun ReceiptDraft.filledItems() =
-        items.filter { it.name.isNotBlank() || it.amountKopecks != 0L }
+    private fun ReceiptDraft.filledItems() = items.filter { it.name.isNotBlank() || it.amountKopecks != 0L }
 
     /**
      * Можно ли показать экран проверки: есть хотя бы одна строка, у всех строк
@@ -44,32 +42,34 @@ object ManualReceipt {
     }
 
     fun toReceipt(draft: ReceiptDraft): Receipt {
-        val items = draft.filledItems().map { item ->
-            ReceiptItem(
-                name = item.name.trim(),
-                qty = item.qty,
-                // Цена за единицу имеет смысл только вместе с количеством:
-                // без него сумма строки — единственная правда.
-                unitPrice = item.qty?.let { rubles(item.unitPriceKopecks) },
-                amount = rubles(item.amountKopecks),
-            )
-        }
+        val items =
+            draft.filledItems().map { item ->
+                ReceiptItem(
+                    name = item.name.trim(),
+                    qty = item.qty,
+                    // Цена за единицу имеет смысл только вместе с количеством:
+                    // без него сумма строки — единственная правда.
+                    unitPrice = item.qty?.let { rubles(item.unitPriceKopecks) },
+                    amount = rubles(item.amountKopecks),
+                )
+            }
         return Receipt(
             currency = draft.currency.ifBlank { "RUB" },
             items = items,
-            discount = Discount(
-                present = draft.discountKopecks > 0,
-                amount = rubles(draft.discountKopecks),
-            ),
-            serviceCharge = ServiceCharge(
-                present = draft.serviceKopecks > 0,
-                amount = rubles(draft.serviceKopecks),
-            ),
+            discount =
+                Discount(
+                    present = draft.discountKopecks > 0,
+                    amount = rubles(draft.discountKopecks),
+                ),
+            serviceCharge =
+                ServiceCharge(
+                    present = draft.serviceKopecks > 0,
+                    amount = rubles(draft.serviceKopecks),
+                ),
             total = rubles(draft.totalKopecks),
         )
     }
 
     /** Копейки → рубли без хвоста двоичной погрешности: 39025 → 390.25. */
-    private fun rubles(kopecks: Long): Double =
-        BigDecimal.valueOf(kopecks).movePointLeft(2).toDouble()
+    private fun rubles(kopecks: Long): Double = BigDecimal.valueOf(kopecks).movePointLeft(2).toDouble()
 }

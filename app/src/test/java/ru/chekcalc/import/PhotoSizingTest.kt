@@ -8,7 +8,6 @@ import ru.chekcalc.image.PhotoSizing
 import ru.chekcalc.image.PixelSize
 
 class PhotoSizingTest {
-
     @Test
     fun `фото 4000 на 3000 уменьшается до 1600 на 1200`() {
         assertEquals(PixelSize(1600, 1200), PhotoSizing.targetSize(4000, 3000))

@@ -5,30 +5,31 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.RequestBody.Companion.toRequestBody
-import kotlin.math.abs
 import okhttp3.Response
-import ru.chekcalc.model.Discount
 import ru.chekcalc.model.Receipt
 import ru.chekcalc.model.ReceiptItem
-import ru.chekcalc.model.ServiceCharge
 import ru.chekcalc.storage.ProviderSettings
 import java.io.IOException
 import java.util.Base64
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 /** Чем закончилась попытка распознать чек. */
 sealed interface RecognitionResult {
-    data class Success(val receipt: Receipt, val attempts: Int) : RecognitionResult
+    data class Success(
+        val receipt: Receipt,
+        val attempts: Int,
+    ) : RecognitionResult
 
     /**
      * Ошибка для экрана. [retryable] — имеет ли смысл кнопка «Повторить»
@@ -53,19 +54,20 @@ enum class FailureKind { NETWORK, TIMEOUT, PROVIDER, INVALID_RESPONSE, UNREADABL
  * - пустой items — это «чек не распознан», а не сетевой сбой.
  */
 class RecognitionClient(
-    private val http: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
-        .callTimeout(25, TimeUnit.SECONDS)
-        // Повтор — только наш, по правилу «невалидный ответ один раз».
-        .retryOnConnectionFailure(false)
-        .build(),
+    private val http: OkHttpClient =
+        OkHttpClient
+            .Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .callTimeout(25, TimeUnit.SECONDS)
+            // Повтор — только наш, по правилу «невалидный ответ один раз».
+            .retryOnConnectionFailure(false)
+            .build(),
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val attempts: Int = 2,
     /** Два независимых прогона на DeepSeek: ошибки модели взаимно закрываются. */
     private val doubleSample: (String) -> Boolean = ::disablesThinking,
 ) {
-
     /**
      * Останавливает диспетчер OkHttp. В приложении клиент живёт всё время,
      * а тестам нужно освободить фоновые потоки, иначе JVM не завершится.
@@ -88,12 +90,13 @@ class RecognitionClient(
         var lastFailure: RecognitionResult.Failure? = null
         var thinkingAttempted = false
         for (attempt in 1..attempts) {
-            val exchange = exchange(
-                image = image,
-                settings = settings,
-                allowThinking = !thinkingAttempted,
-                forceDeepThinking = forceDeepThinking,
-            )
+            val exchange =
+                exchange(
+                    image = image,
+                    settings = settings,
+                    allowThinking = !thinkingAttempted,
+                    forceDeepThinking = forceDeepThinking,
+                )
             thinkingAttempted = thinkingAttempted || exchange.thinkingAttempted
             when (val result = exchange.result) {
                 is RecognitionResult.Success -> return result.copy(attempts = attempt)
@@ -138,11 +141,12 @@ class RecognitionClient(
                 thinkingAttempted = false,
             )
         }
-        val (first, second) = coroutineScope {
-            val a = async { call(image, settings, disableThinking = true) }
-            val b = async { call(image, settings, disableThinking = true) }
-            a.await() to b.await()
-        }
+        val (first, second) =
+            coroutineScope {
+                val a = async { call(image, settings, disableThinking = true) }
+                val b = async { call(image, settings, disableThinking = true) }
+                a.await() to b.await()
+            }
         val ok = listOf(first, second).filterIsInstance<RecognitionResult.Success>()
         if (ok.isEmpty()) {
             // Если один ответ — отказ провайдера (ключ, лимит), повтор не лечит:
@@ -165,7 +169,10 @@ class RecognitionClient(
         )
     }
 
-    private class Exchange(val result: RecognitionResult, val thinkingAttempted: Boolean)
+    private class Exchange(
+        val result: RecognitionResult,
+        val thinkingAttempted: Boolean,
+    )
 
     /**
      * Один обмен с провайдером.
@@ -179,40 +186,52 @@ class RecognitionClient(
         settings: ProviderSettings,
         disableThinking: Boolean,
     ): RecognitionResult {
-        val request = Request.Builder()
-            .url(settings.baseUrl.trimEnd('/') + "/chat/completions")
-            .header("Authorization", "Bearer ${settings.apiKey}")
-            .header("Content-Type", "application/json")
-            .post(buildBody(image, settings, disableThinking).toRequestBody(JSON_MEDIA))
-            .build()
+        val request =
+            Request
+                .Builder()
+                .url(settings.baseUrl.trimEnd('/') + "/chat/completions")
+                .header("Authorization", "Bearer ${settings.apiKey}")
+                .header("Content-Type", "application/json")
+                .post(buildBody(image, settings, disableThinking).toRequestBody(JSON_MEDIA))
+                .build()
 
         return suspendCancellableCoroutine { continuation ->
             val call = http.newCall(request)
             continuation.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : Callback {
-                override fun onFailure(call: Call, error: IOException) {
-                    if (!continuation.isActive) return
-                    val failure = if (error is java.io.InterruptedIOException) {
-                        RecognitionResult.Failure(FailureKind.TIMEOUT, "Провайдер не ответил вовремя")
-                    } else {
-                        RecognitionResult.Failure(FailureKind.NETWORK, "Нет связи с провайдером")
+            call.enqueue(
+                object : Callback {
+                    override fun onFailure(
+                        call: Call,
+                        error: IOException,
+                    ) {
+                        if (!continuation.isActive) return
+                        val failure =
+                            if (error is java.io.InterruptedIOException) {
+                                RecognitionResult.Failure(FailureKind.TIMEOUT, "Провайдер не ответил вовремя")
+                            } else {
+                                RecognitionResult.Failure(FailureKind.NETWORK, "Нет связи с провайдером")
+                            }
+                        continuation.resumeWith(Result.success(failure))
                     }
-                    continuation.resumeWith(Result.success(failure))
-                }
 
-                override fun onResponse(call: Call, response: Response) {
-                    // Ошибку чтения тела нельзя выпускать из колбэка: тогда
-                    // продолжение не завершится и вызов повиснет навсегда.
-                    val result = try {
-                        response.use { readResult(it) }
-                    } catch (timeout: java.io.InterruptedIOException) {
-                        RecognitionResult.Failure(FailureKind.TIMEOUT, "Провайдер не ответил вовремя")
-                    } catch (error: IOException) {
-                        RecognitionResult.Failure(FailureKind.NETWORK, "Нет связи с провайдером")
+                    override fun onResponse(
+                        call: Call,
+                        response: Response,
+                    ) {
+                        // Ошибку чтения тела нельзя выпускать из колбэка: тогда
+                        // продолжение не завершится и вызов повиснет навсегда.
+                        val result =
+                            try {
+                                response.use { readResult(it) }
+                            } catch (timeout: java.io.InterruptedIOException) {
+                                RecognitionResult.Failure(FailureKind.TIMEOUT, "Провайдер не ответил вовремя")
+                            } catch (error: IOException) {
+                                RecognitionResult.Failure(FailureKind.NETWORK, "Нет связи с провайдером")
+                            }
+                        if (continuation.isActive) continuation.resumeWith(Result.success(result))
                     }
-                    if (continuation.isActive) continuation.resumeWith(Result.success(result))
-                }
-            })
+                },
+            )
         }
     }
 
@@ -230,34 +249,37 @@ class RecognitionClient(
                 "Ответ провайдера больше допустимого",
             )
         }
-        val payload = response.body?.byteStream()?.let { ResponseReader.read(it) }
-            ?: return RecognitionResult.Failure(
-                FailureKind.INVALID_RESPONSE,
-                "Пустой или слишком большой ответ провайдера",
-            )
+        val payload =
+            response.body?.byteStream()?.let { ResponseReader.read(it) }
+                ?: return RecognitionResult.Failure(
+                    FailureKind.INVALID_RESPONSE,
+                    "Пустой или слишком большой ответ провайдера",
+                )
         return parse(payload)
     }
 
     private fun parse(payload: String): RecognitionResult {
-        val content = try {
-            val root = json.parseToJsonElement(payload).jsonObject
-            val choices = root["choices"]?.jsonArray ?: return invalid("нет choices в ответе")
-            val first = choices.firstOrNull()?.jsonObject ?: return invalid("пустой choices")
-            val message = first["message"]?.jsonObject ?: return invalid("нет message")
-            message["content"]?.jsonPrimitive?.content ?: return invalid("нет content")
-        } catch (error: SerializationException) {
-            return invalid("ответ не JSON")
-        } catch (error: IllegalArgumentException) {
-            return invalid("ответ не JSON")
-        }
+        val content =
+            try {
+                val root = json.parseToJsonElement(payload).jsonObject
+                val choices = root["choices"]?.jsonArray ?: return invalid("нет choices в ответе")
+                val first = choices.firstOrNull()?.jsonObject ?: return invalid("пустой choices")
+                val message = first["message"]?.jsonObject ?: return invalid("нет message")
+                message["content"]?.jsonPrimitive?.content ?: return invalid("нет content")
+            } catch (error: SerializationException) {
+                return invalid("ответ не JSON")
+            } catch (error: IllegalArgumentException) {
+                return invalid("ответ не JSON")
+            }
 
-        val receipt = try {
-            json.decodeFromString<Receipt>(stripCodeFence(content))
-        } catch (error: SerializationException) {
-            return invalid("ответ не по схеме receipt.v1")
-        } catch (error: IllegalArgumentException) {
-            return invalid("ответ не по схеме receipt.v1")
-        }
+        val receipt =
+            try {
+                json.decodeFromString<Receipt>(stripCodeFence(content))
+            } catch (error: SerializationException) {
+                return invalid("ответ не по схеме receipt.v1")
+            } catch (error: IllegalArgumentException) {
+                return invalid("ответ не по схеме receipt.v1")
+            }
 
         validate(receipt)?.let { return it }
         if (receipt.items.isEmpty()) {
@@ -285,13 +307,15 @@ class RecognitionClient(
     }
 
     /** Суммы в рублях: не больше миллиарда, иначе не переживут перевод в копейки. */
-    private fun inRange(value: Double): Boolean =
-        value.isFinite() && value >= 0.0 && value <= MAX_RUBLES
+    private fun inRange(value: Double): Boolean = value.isFinite() && value >= 0.0 && value <= MAX_RUBLES
 
-    private fun invalid(message: String) =
-        RecognitionResult.Failure(FailureKind.INVALID_RESPONSE, message)
+    private fun invalid(message: String) = RecognitionResult.Failure(FailureKind.INVALID_RESPONSE, message)
 
-    private fun buildBody(image: ByteArray, settings: ProviderSettings, disableThinking: Boolean): String {
+    private fun buildBody(
+        image: ByteArray,
+        settings: ProviderSettings,
+        disableThinking: Boolean,
+    ): String {
         val encoded = Base64.getEncoder().encodeToString(image)
         return buildJsonObject(
             model = settings.model,
@@ -300,7 +324,11 @@ class RecognitionClient(
         )
     }
 
-    internal fun buildJsonObject(model: String, dataUrl: String, disableThinking: Boolean): String {
+    internal fun buildJsonObject(
+        model: String,
+        dataUrl: String,
+        disableThinking: Boolean,
+    ): String {
         // deepseek-flash по умолчанию думает: на чек это лишние ~1 000 токенов
         // рассуждений и секунды ожидания, а JSON-ответ от них не меняется.
         val thinking = if (disableThinking) ""","thinking":{"type":"disabled"}""" else ""
@@ -311,16 +339,20 @@ class RecognitionClient(
                {"type":"text","text":${JsonPrimitive(PROMPT)}},
                {"type":"image_url","image_url":{"url":${JsonPrimitive(dataUrl)}}}
              ]}]}
-        """.trimIndent()
+            """.trimIndent()
     }
 
     /** Допуск: 1 % от большей суммы, но не меньше копейки. */
-    internal fun tolerance(a: Double, b: Double): Double =
-        maxOf(0.01, 0.01 * maxOf(abs(a), abs(b)))
+    internal fun tolerance(
+        a: Double,
+        b: Double,
+    ): Double = maxOf(0.01, 0.01 * maxOf(abs(a), abs(b)))
 
     /** Итоги расходятся больше чем на 1 %: вероятна ошибка масштаба. */
-    internal fun totalsDiffer(a: Double, b: Double): Boolean =
-        abs(a - b) > tolerance(a, b)
+    internal fun totalsDiffer(
+        a: Double,
+        b: Double,
+    ): Boolean = abs(a - b) > tolerance(a, b)
 
     /**
      * Выбор лучшего из двух ответов.
@@ -330,7 +362,10 @@ class RecognitionClient(
      * случайно сходится с итогом, пряча пропуск. Поэтому берём ответ, который
      * сходится с итогом, а при равенстве — более подробный.
      */
-    internal fun pickReceipt(first: Receipt, second: Receipt): Receipt {
+    internal fun pickReceipt(
+        first: Receipt,
+        second: Receipt,
+    ): Receipt {
         val firstOk = matchesTotal(first)
         val secondOk = matchesTotal(second)
         return when {
@@ -358,20 +393,26 @@ class RecognitionClient(
     }
 
     /** Одна и та же позиция: похожее название и сумма в пределах 1 %. */
-
-    /** Одна и та же позиция: похожее название и сумма в пределах 1 %. */
-    internal fun sameItem(a: ReceiptItem, b: ReceiptItem): Boolean =
-        similarName(a.name, b.name) >= 0.8 && abs(a.amount - b.amount) <= tolerance(a.amount, b.amount)
+    internal fun sameItem(
+        a: ReceiptItem,
+        b: ReceiptItem,
+    ): Boolean = similarName(a.name, b.name) >= 0.8 && abs(a.amount - b.amount) <= tolerance(a.amount, b.amount)
 
     /** Похожесть названий 0..1 по расстоянию Левенштейна. */
-    internal fun similarName(a: String, b: String): Double {
+    internal fun similarName(
+        a: String,
+        b: String,
+    ): Double {
         val x = a.lowercase().trim().replace(WHITESPACE, " ")
         val y = b.lowercase().trim().replace(WHITESPACE, " ")
         if (x.isEmpty() || y.isEmpty()) return 0.0
         return 1.0 - levenshtein(x, y).toDouble() / maxOf(x.length, y.length)
     }
 
-    private fun levenshtein(a: String, b: String): Int {
+    private fun levenshtein(
+        a: String,
+        b: String,
+    ): Int {
         var previous = IntArray(b.length + 1) { it }
         var current = IntArray(b.length + 1)
         for (i in 1..a.length) {
@@ -387,12 +428,12 @@ class RecognitionClient(
         return previous[b.length]
     }
 
-
     private fun stripCodeFence(content: String): String {
         val trimmed = content.trim()
         if (!trimmed.startsWith("```")) return trimmed
         return trimmed
-            .removePrefix("```json").removePrefix("```")
+            .removePrefix("```json")
+            .removePrefix("```")
             .removeSuffix("```")
             .trim()
     }
@@ -409,7 +450,8 @@ class RecognitionClient(
         const val MAX_RESPONSE_BYTES = ResponseReader.MAX_RESPONSE_BYTES
         const val MAX_RUBLES = 1_000_000_000.0
 
-        val PROMPT = """
+        val PROMPT =
+            """
             Ты распознаёшь кассовый чек по фотографии и возвращаешь строго JSON по схеме:
             {"currency":"RUB","items":[{"name":"...","qty":1,"unit_price":100.0,"amount":100.0}],
              "discount":{"present":false,"amount":0},"service_charge":{"present":false,"amount":0},
@@ -430,7 +472,7 @@ class RecognitionClient(
             - доставку, упаковку и сервисный сбор вынеси в service_charge
               (present = true, amount), в items их не добавляй; в warnings —
               только если сумма нечитаема.
-        """.trimIndent()
+            """.trimIndent()
     }
 }
 
@@ -438,6 +480,9 @@ class RecognitionClient(
 internal fun disablesThinking(baseUrl: String): Boolean =
     runCatching {
         // Хвостовая точка в FQDN — тот же хост, но строка другая.
-        java.net.URI(baseUrl).host?.trimEnd('.')
+        java.net
+            .URI(baseUrl)
+            .host
+            ?.trimEnd('.')
             ?.equals("api.deepseek.com", ignoreCase = true) == true
     }.getOrDefault(false)

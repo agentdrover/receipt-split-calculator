@@ -16,13 +16,17 @@ data class HistoryUiState(
  * Чистая функция: тест проверяет переход целиком (список, очередь, сбои), а не
  * отдельные поля, и не пропустит потерю публикации записанного списка.
  */
-internal fun applySaveResult(state: HistoryUiState, result: HistorySaveState): HistoryUiState =
+internal fun applySaveResult(
+    state: HistoryUiState,
+    result: HistorySaveState,
+): HistoryUiState =
     state.copy(
         entries = result.saved ?: state.entries,
-        failures = nextFailuresAfterSave(
-            current = state.failures,
-            failure = result.failure,
-            anySaved = result.saved != null,
-        ),
+        failures =
+            nextFailuresAfterSave(
+                current = state.failures,
+                failure = result.failure,
+                anySaved = result.saved != null,
+            ),
         saving = result,
     )

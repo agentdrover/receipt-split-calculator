@@ -1,9 +1,8 @@
 package ru.chekcalc.ui.review
 
 import android.graphics.BitmapFactory
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -25,8 +24,10 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -41,7 +42,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -65,9 +65,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import ru.chekcalc.calc.Money
 import ru.chekcalc.calc.rublesToKopecks
-import androidx.activity.compose.BackHandler
 import ru.chekcalc.ui.components.BackButton
 
 /**
@@ -116,16 +114,18 @@ fun ReviewScreen(
     var viewerOpen by rememberSaveable { mutableStateOf(false) }
     // Декодируем один раз: карточка и полноэкранный просмотр делят битмап.
     val photoBitmap by produceState<ImageBitmap?>(initialValue = null, photo) {
-        value = photo?.let { bytes ->
-            withContext(Dispatchers.IO) {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        value =
+            photo?.let { bytes ->
+                withContext(Dispatchers.IO) {
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                }
             }
-        }
     }
     // Масштаб фото переживает поворот и сворачивание карточки.
-    val photoView = rememberSaveable(stateSaver = PhotoViewStateSaver) {
-        mutableStateOf(PhotoViewState())
-    }
+    val photoView =
+        rememberSaveable(stateSaver = PhotoViewStateSaver) {
+            mutableStateOf(PhotoViewState())
+        }
 
     Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         LazyColumn(
@@ -207,12 +207,13 @@ fun ReviewScreen(
                 onChange(updated.apply(draft))
                 itemSheetOpen = false
             },
-            onDelete = editingItem.itemId?.let { id ->
-                {
-                    onChange(draft.removeItem(id))
-                    itemSheetOpen = false
-                }
-            },
+            onDelete =
+                editingItem.itemId?.let { id ->
+                    {
+                        onChange(draft.removeItem(id))
+                        itemSheetOpen = false
+                    }
+                },
         )
     }
 
@@ -246,7 +247,9 @@ private fun ReviewHeader(
             color = MaterialTheme.colorScheme.onBackground,
         )
         Text(
-            text = "${draft.items.size} ${positionsWord(draft.items.size)} · итог ${formatRublesGrouped(draft.totalKopecks, draft.currency)}",
+            text = "${draft.items.size} ${positionsWord(
+                draft.items.size,
+            )} · итог ${formatRublesGrouped(draft.totalKopecks, draft.currency)}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -264,17 +267,22 @@ private fun ReviewHeader(
                 Text(
                     text = if (deepBusy) "Распознаём точнее…" else "Распознать точнее",
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (mismatch) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color =
+                        if (mismatch) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                 )
             }
             if (!deepBusy) {
                 Text(
-                    text = if (mismatch) {
-                        "Позиции не сходятся с итогом: глубокий режим может найти пропущенные строки."
-                    } else {
-                        "Медленнее, но точнее: помогает на длинных и мятых чеках."
-                    },
+                    text =
+                        if (mismatch) {
+                            "Позиции не сходятся с итогом: глубокий режим может найти пропущенные строки."
+                        } else {
+                            "Медленнее, но точнее: помогает на длинных и мятых чеках."
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
@@ -293,13 +301,17 @@ private fun ReviewHeader(
 }
 
 @Composable
-private fun TotalsCard(draft: ReceiptDraft, onEdit: () -> Unit) {
+private fun TotalsCard(
+    draft: ReceiptDraft,
+    onEdit: () -> Unit,
+) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onEdit),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .clickable(onClick = onEdit),
     ) {
         TotalRow("Итог", formatKopecks(draft.totalKopecks, draft.currency), bold = true)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -310,7 +322,11 @@ private fun TotalsCard(draft: ReceiptDraft, onEdit: () -> Unit) {
 }
 
 @Composable
-private fun TotalRow(label: String, value: String, bold: Boolean = false) {
+private fun TotalRow(
+    label: String,
+    value: String,
+    bold: Boolean = false,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -322,8 +338,9 @@ private fun TotalRow(label: String, value: String, bold: Boolean = false) {
         )
         Text(
             text = value,
-            style = (if (bold) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium)
-                .copy(fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal),
+            style =
+                (if (bold) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium)
+                    .copy(fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal),
         )
     }
 }
@@ -335,10 +352,11 @@ private fun ItemsCard(
     onAdd: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surface),
     ) {
         draft.items.forEachIndexed { index, item ->
             if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -348,10 +366,11 @@ private fun ItemsCard(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onAdd)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onAdd)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("＋", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
@@ -366,12 +385,17 @@ private fun ItemsCard(
 }
 
 @Composable
-private fun ItemRow(item: DraftItem, currency: String, onClick: () -> Unit) {
+private fun ItemRow(
+    item: DraftItem,
+    currency: String,
+    onClick: () -> Unit,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -397,31 +421,39 @@ private fun ItemRow(item: DraftItem, currency: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ResidualWarning(text: String, blocking: Boolean = false) {
+private fun ResidualWarning(
+    text: String,
+    blocking: Boolean = false,
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onErrorContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.errorContainer)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.errorContainer)
+                .padding(horizontal = 14.dp, vertical = 11.dp),
     )
 }
 
 @Composable
-private fun PrimaryNextButton(onClick: () -> Unit, enabled: Boolean = true) {
+private fun PrimaryNextButton(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
     Button(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(26.dp),
         contentPadding = PaddingValues(horizontal = 22.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = 8.dp, bottom = 10.dp)
-            .height(56.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 8.dp, bottom = 10.dp)
+                .height(56.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -450,19 +482,21 @@ private fun ReviewPhotoCard(
 ) {
     if (!expanded) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .clickable(onClick = onToggle)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier
-                    .size(34.dp, 44.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                modifier =
+                    Modifier
+                        .size(34.dp, 44.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
                 bitmap?.let { thumb ->
                     Image(
@@ -488,12 +522,13 @@ private fun ReviewPhotoCard(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .then(rememberPhotoGestures(view = view, onViewChange = onViewChange, onTap = onOpenViewer)),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .then(rememberPhotoGestures(view = view, onViewChange = onViewChange, onTap = onOpenViewer)),
         contentAlignment = Alignment.Center,
     ) {
         val image = bitmap
@@ -508,25 +543,27 @@ private fun ReviewPhotoCard(
                 bitmap = image,
                 contentDescription = "Фото чека",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().graphicsLayer(
-                    scaleX = view.scale,
-                    scaleY = view.scale,
-                    translationX = view.offset.x,
-                    translationY = view.offset.y,
-                ),
+                modifier =
+                    Modifier.fillMaxSize().graphicsLayer(
+                        scaleX = view.scale,
+                        scaleY = view.scale,
+                        translationX = view.offset.x,
+                        translationY = view.offset.y,
+                    ),
             )
         }
         Text(
             text = "Свернуть",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(10.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
-                .clickable(onClick = onToggle)
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
         )
         Text(
             text = "нажмите · щипок",
@@ -539,13 +576,14 @@ private fun ReviewPhotoCard(
                 text = "Сбросить масштаб",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 10.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
-                    .clickable { onViewChange(view.reset()) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 10.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+                        .clickable { onViewChange(view.reset()) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
     }
@@ -565,13 +603,14 @@ private fun ItemEditSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()
-                // Альбомная ориентация с клавиатурой не должна обрезать кнопки.
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    // Альбомная ориентация с клавиатурой не должна обрезать кнопки.
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
         ) {
             Text(
                 text = if (state.itemId == null) "Новая позиция" else "Позиция",
@@ -594,11 +633,12 @@ private fun ItemEditSheet(
                     label = { Text("Кол-во") },
                     singleLine = true,
                     isError = state.qtyText.isNotBlank() && state.qty == null,
-                    supportingText = if (state.qtyText.isNotBlank() && state.qty == null) {
-                        { Text("Введите число") }
-                    } else {
-                        null
-                    },
+                    supportingText =
+                        if (state.qtyText.isNotBlank() && state.qty == null) {
+                            { Text("Введите число") }
+                        } else {
+                            null
+                        },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                 )
@@ -648,12 +688,13 @@ private fun TotalsEditSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
         ) {
             Text(
                 text = "Итог чека",
@@ -745,9 +786,10 @@ private fun rememberPhotoGestures(
                 travelled += pan
                 if (travelled.getDistance() > slop) moved = true
                 if (zooming || current.scale > PhotoViewState.MIN_SCALE) {
-                    val next = current.zoom(zoom).let { state ->
-                        if (state.scale > PhotoViewState.MIN_SCALE) state.pan(pan) else state
-                    }
+                    val next =
+                        current.zoom(zoom).let { state ->
+                            if (state.scale > PhotoViewState.MIN_SCALE) state.pan(pan) else state
+                        }
                     onViewChange(next)
                     event.changes.forEach { it.consume() }
                 }
@@ -759,7 +801,10 @@ private fun rememberPhotoGestures(
 
 /** Полноэкранный просмотр фото: чёрный фон, зум, крестик и системный Back. */
 @Composable
-private fun PhotoViewer(bitmap: ImageBitmap?, onClose: () -> Unit) {
+private fun PhotoViewer(
+    bitmap: ImageBitmap?,
+    onClose: () -> Unit,
+) {
     // Увеличение в просмотре тоже переживает поворот.
     var view by rememberSaveable(stateSaver = PhotoViewStateSaver) {
         mutableStateOf(PhotoViewState())
@@ -767,10 +812,11 @@ private fun PhotoViewer(bitmap: ImageBitmap?, onClose: () -> Unit) {
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .then(rememberPhotoGestures(view = view, onViewChange = { view = it }, onTap = null)),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .then(rememberPhotoGestures(view = view, onViewChange = { view = it }, onTap = null)),
             contentAlignment = Alignment.Center,
         ) {
             val image = bitmap
@@ -781,66 +827,71 @@ private fun PhotoViewer(bitmap: ImageBitmap?, onClose: () -> Unit) {
                     bitmap = image,
                     contentDescription = "Фото чека",
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().graphicsLayer(
-                        scaleX = view.scale,
-                        scaleY = view.scale,
-                        translationX = view.offset.x,
-                        translationY = view.offset.y,
-                    ),
+                    modifier =
+                        Modifier.fillMaxSize().graphicsLayer(
+                            scaleX = view.scale,
+                            scaleY = view.scale,
+                            translationX = view.offset.x,
+                            translationY = view.offset.y,
+                        ),
                 )
             }
             Text(
                 text = "×",
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color(0x66000000))
-                    .clickable(onClick = onClose)
-                    .padding(horizontal = 14.dp, vertical = 4.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0x66000000))
+                        .clickable(onClick = onClose)
+                        .padding(horizontal = 14.dp, vertical = 4.dp),
             )
         }
     }
 }
 
 /** Сохранение открытого листа позиции: идентификатор и три поля. */
-private val ItemEditStateSaver = listSaver<ItemEditState, String>(
-    save = { listOf(it.itemId?.toString() ?: "", it.name, it.qtyText, it.priceText) },
-    restore = { values ->
-        ItemEditState(
-            itemId = values[0].takeIf { it.isNotBlank() }?.toLongOrNull(),
-            name = values[1],
-            qtyText = values[2],
-            priceText = values[3],
-        )
-    },
-)
+private val ItemEditStateSaver =
+    listSaver<ItemEditState, String>(
+        save = { listOf(it.itemId?.toString() ?: "", it.name, it.qtyText, it.priceText) },
+        restore = { values ->
+            ItemEditState(
+                itemId = values[0].takeIf { it.isNotBlank() }?.toLongOrNull(),
+                name = values[1],
+                qtyText = values[2],
+                priceText = values[3],
+            )
+        },
+    )
 
 /** Сохранение открытого листа «Итог чека». */
-private val TotalsEditStateSaver = listSaver<TotalsEditState, String>(
-    save = {
-        listOf(it.totalText, it.discountText, it.serviceText, it.itemsSumKopecks?.toString().orEmpty())
-    },
-    // Три строки — состояние прежних версий: сумма позиций тогда не сохранялась.
-    restore = { values ->
-        TotalsEditState(
-            totalText = values[0],
-            discountText = values[1],
-            serviceText = values[2],
-            // Пустая строка — состояние прежней версии: суммy позиций
-            // восстановить не из чего, а нулём её считать нельзя.
-            itemsSumKopecks = values.getOrNull(3)?.toLongOrNull(),
-        )
-    },
-)
+private val TotalsEditStateSaver =
+    listSaver<TotalsEditState, String>(
+        save = {
+            listOf(it.totalText, it.discountText, it.serviceText, it.itemsSumKopecks?.toString().orEmpty())
+        },
+        // Три строки — состояние прежних версий: сумма позиций тогда не сохранялась.
+        restore = { values ->
+            TotalsEditState(
+                totalText = values[0],
+                discountText = values[1],
+                serviceText = values[2],
+                // Пустая строка — состояние прежней версии: суммy позиций
+                // восстановить не из чего, а нулём её считать нельзя.
+                itemsSumKopecks = values.getOrNull(3)?.toLongOrNull(),
+            )
+        },
+    )
 
 /** Сохранение масштаба и сдвига фото: список float-ов переживает поворот. */
-private val PhotoViewStateSaver = listSaver<PhotoViewState, Float>(
-    save = { listOf(it.scale, it.offset.x, it.offset.y) },
-    restore = { values -> PhotoViewState(values[0], Offset(values[1], values[2])) },
-)
+private val PhotoViewStateSaver =
+    listSaver<PhotoViewState, Float>(
+        save = { listOf(it.scale, it.offset.x, it.offset.y) },
+        restore = { values -> PhotoViewState(values[0], Offset(values[1], values[2])) },
+    )
 
 /** Правильная форма слова для подзаголовка: 1 позиция, 2 позиции, 5 позиций. */
 private fun positionsWord(count: Int): String {
@@ -869,11 +920,12 @@ internal fun MoneyField(
         label = { Text(label) },
         singleLine = true,
         isError = invalid,
-        supportingText = if (invalid) {
-            { Text("Введите число") }
-        } else {
-            null
-        },
+        supportingText =
+            if (invalid) {
+                { Text("Введите число") }
+            } else {
+                null
+            },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier,
     )
@@ -919,13 +971,22 @@ internal fun parseQty(text: String): Double? {
 }
 
 /** Рубли с разрядами и без лишних копеек: 124000 → «1 240 ₽», 124050 → «1 240,50 ₽». */
-internal fun formatRublesGrouped(kopecks: Long, currency: String = "RUB"): String {
+internal fun formatRublesGrouped(
+    kopecks: Long,
+    currency: String = "RUB",
+): String {
     if (kopecks == Long.MIN_VALUE) return "—"
     val sign = if (kopecks < 0) "−" else ""
     val value = kotlin.math.abs(kopecks)
     val rubles = value / 100
     val rest = value % 100
-    val grouped = rubles.toString().reversed().chunked(3).joinToString(" ").reversed()
+    val grouped =
+        rubles
+            .toString()
+            .reversed()
+            .chunked(3)
+            .joinToString(" ")
+            .reversed()
     val suffix = if (currency == "RUB") "₽" else currency
     return if (rest == 0L) {
         "$sign$grouped $suffix"
@@ -939,13 +1000,22 @@ internal fun formatRublesGrouped(kopecks: Long, currency: String = "RUB"): Strin
  *
  * Валюта чека сохраняется: чек в вонах не должен выглядеть рублёвым (#2327).
  */
-internal fun formatKopecks(kopecks: Long, currency: String = "RUB"): String {
+internal fun formatKopecks(
+    kopecks: Long,
+    currency: String = "RUB",
+): String {
     if (kopecks == Long.MIN_VALUE) return "—"
     val sign = if (kopecks < 0) "−" else ""
     val value = kotlin.math.abs(kopecks)
     val rubles = value / 100
     val rest = value % 100
-    val grouped = rubles.toString().reversed().chunked(3).joinToString(" ").reversed()
+    val grouped =
+        rubles
+            .toString()
+            .reversed()
+            .chunked(3)
+            .joinToString(" ")
+            .reversed()
     val suffix = if (currency == "RUB") "₽" else currency
     return "$sign$grouped,${rest.toString().padStart(2, '0')} $suffix"
 }

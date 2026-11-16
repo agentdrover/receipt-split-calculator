@@ -10,7 +10,10 @@ object Money {
      * Рубли печатаются знаком «₽», остальные — кодом валюты: символов для всех
      * валют нет, а подписать воны рублём хуже, чем показать код (#2327).
      */
-    fun format(kopecks: Long, currency: String = "RUB"): String {
+    fun format(
+        kopecks: Long,
+        currency: String = "RUB",
+    ): String {
         val body = formatKopecks(kopecks)
         if (currency == "RUB") return body
         // «1 000,00 KRW»: отрезаем « ₽» и подставляем код.

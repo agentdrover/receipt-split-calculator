@@ -41,11 +41,12 @@ class HistorySaver(
 
     /** Новая запись встаёт в конец очереди; повторный id заменяет старую версию. */
     fun submit(entry: HistoryEntry): HistorySaveState {
-        val queue = if (pending.any { it.id == entry.id }) {
-            pending.map { if (it.id == entry.id) entry else it }
-        } else {
-            pending + entry
-        }
+        val queue =
+            if (pending.any { it.id == entry.id }) {
+                pending.map { if (it.id == entry.id) entry else it }
+            } else {
+                pending + entry
+            }
         return flush(queue)
     }
 
@@ -73,11 +74,12 @@ class HistorySaver(
         var failure: SaveFailure? = null
         while (pending.isNotEmpty()) {
             val next = pending.first()
-            val outcome = try {
-                write(next)
-            } catch (error: Exception) {
-                null
-            }
+            val outcome =
+                try {
+                    write(next)
+                } catch (error: Exception) {
+                    null
+                }
             when (outcome) {
                 is SaveOutcome.Saved -> {
                     saved = outcome.entries

@@ -6,19 +6,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ShareCalculatorTest {
-
     @Test
     fun `все позиции целиком дают итог чека`() {
-        val input = CalcInput(
-            lines = listOf(
-                CalcLine(78_000, 1, 1),
-                CalcLine(69_000, 1, 1),
-                CalcLine(60_000, 1, 1),
-                CalcLine(45_000, 1, 1),
-            ),
-            discountKopecks = 25_200,
-            serviceKopecks = 22_700,
-        )
+        val input =
+            CalcInput(
+                lines =
+                    listOf(
+                        CalcLine(78_000, 1, 1),
+                        CalcLine(69_000, 1, 1),
+                        CalcLine(60_000, 1, 1),
+                        CalcLine(45_000, 1, 1),
+                    ),
+                discountKopecks = 25_200,
+                serviceKopecks = 22_700,
+            )
 
         // 2520 − 252 + 227 = 2495 ₽
         assertEquals(249_500, ShareCalculator.calculate(input).totalKopecks)
@@ -26,10 +27,11 @@ class ShareCalculatorTest {
 
     @Test
     fun `скидка распределяется пропорционально доле`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(300_000, 1, 3)),
-            discountKopecks = 30_000,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(300_000, 1, 3)),
+                discountKopecks = 30_000,
+            )
 
         val result = ShareCalculator.calculate(input)
 
@@ -39,43 +41,47 @@ class ShareCalculatorTest {
 
     @Test
     fun `обслуживание добавляется к своей части`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(100_000, 1, 1)),
-            serviceKopecks = 10_000,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(100_000, 1, 1)),
+                serviceKopecks = 10_000,
+            )
 
         assertEquals(110_000, ShareCalculator.calculate(input).totalKopecks)
     }
 
     @Test
     fun `чаевые прибавляются к своей части`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(100_000, 1, 1)),
-            tipKopecks = 10_000,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(100_000, 1, 1)),
+                tipKopecks = 10_000,
+            )
 
         assertEquals(110_000, ShareCalculator.calculate(input).totalKopecks)
     }
 
     @Test
     fun `ничего своего остаются только чаевые`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(100_000, 0, 1), CalcLine(50_000, 0, 1)),
-            discountKopecks = 10_000,
-            serviceKopecks = 5_000,
-            tipKopecks = 7_000,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(100_000, 0, 1), CalcLine(50_000, 0, 1)),
+                discountKopecks = 10_000,
+                serviceKopecks = 5_000,
+                tipKopecks = 7_000,
+            )
 
         assertEquals(7_000, ShareCalculator.calculate(input).totalKopecks)
     }
 
     @Test
     fun `скидка на весь чек обнуляет позиции`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(100_000, 1, 1)),
-            discountKopecks = 100_000,
-            tipKopecks = 4_500,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(100_000, 1, 1)),
+                discountKopecks = 100_000,
+                tipKopecks = 4_500,
+            )
 
         val result = ShareCalculator.calculate(input)
 
@@ -85,11 +91,12 @@ class ShareCalculatorTest {
 
     @Test
     fun `скидка на весь чек не теряет обслуживание`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(100_000, 1, 1)),
-            discountKopecks = 100_000,
-            serviceKopecks = 10_000,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(100_000, 1, 1)),
+                discountKopecks = 100_000,
+                serviceKopecks = 10_000,
+            )
 
         // 1000 − 1000 + 100 = 100 ₽: кто взял весь чек, тот платит и обслуживание
         assertEquals(10_000, ShareCalculator.calculate(input).totalKopecks)
@@ -98,10 +105,11 @@ class ShareCalculatorTest {
     @Test
     fun `половина рубля округляется вверх, а не вниз`() {
         // 300 − 0,50 = 299,50 ₽ → 300 ₽
-        val input = CalcInput(
-            lines = listOf(CalcLine(30_000, 1, 1)),
-            discountKopecks = 50,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(30_000, 1, 1)),
+                discountKopecks = 50,
+            )
 
         assertEquals(30_000, ShareCalculator.calculate(input).totalKopecks)
     }
@@ -123,12 +131,14 @@ class ShareCalculatorTest {
     fun `увеличение доли не уменьшает итог`() {
         var previous = Long.MIN_VALUE
         for (step in 0..10) {
-            val total = ShareCalculator.calculate(
-                CalcInput(
-                    lines = listOf(CalcLine(100_000, step, 10), CalcLine(50_000, 0, 1)),
-                    tipKopecks = 1_000,
-                ),
-            ).totalKopecks
+            val total =
+                ShareCalculator
+                    .calculate(
+                        CalcInput(
+                            lines = listOf(CalcLine(100_000, step, 10), CalcLine(50_000, 0, 1)),
+                            tipKopecks = 1_000,
+                        ),
+                    ).totalKopecks
             assertTrue("итог упал на доле $step/10", total >= previous)
             previous = total
         }
@@ -149,10 +159,11 @@ class ShareCalculatorTest {
 
     @Test
     fun `скидка больше суммы позиций отклоняется`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 2)),
-            discountKopecks = 120_000,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 2)),
+                discountKopecks = 120_000,
+            )
 
         assertThrows(IllegalArgumentException::class.java) {
             ShareCalculator.calculate(input)
@@ -177,21 +188,23 @@ class ShareCalculatorTest {
 
     @Test
     fun `полная скидка с обслуживанием не обнуляет обслуживание`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 2)),
-            discountKopecks = 100_000,
-            serviceKopecks = 10_000,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 2)),
+                discountKopecks = 100_000,
+                serviceKopecks = 10_000,
+            )
 
         assertEquals(5_000, ShareCalculator.calculate(input).totalKopecks)
     }
 
     @Test
     fun `полная скидка без обслуживания и чаевых даёт ноль`() {
-        val input = CalcInput(
-            lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 1)),
-            discountKopecks = 100_000,
-        )
+        val input =
+            CalcInput(
+                lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 1)),
+                discountKopecks = 100_000,
+            )
 
         assertEquals(0, ShareCalculator.calculate(input).totalKopecks)
     }
@@ -199,17 +212,20 @@ class ShareCalculatorTest {
     @Test
     fun `недопустимые входы отклоняются во всех точках расчёта`() {
         val lines = listOf(CalcLine(amountKopecks = 100_000, shareNumerator = 1, shareDenominator = 1))
-        val badInputs = listOf(
-            CalcInput(lines = lines, discountKopecks = 120_000),
-            CalcInput(lines = lines, serviceKopecks = -1),
-            CalcInput(lines = lines, tipKopecks = -1),
-            CalcInput(lines = emptyList(), serviceKopecks = 1),
-            CalcInput(lines = emptyList(), tipKopecks = 1),
-        )
+        val badInputs =
+            listOf(
+                CalcInput(lines = lines, discountKopecks = 120_000),
+                CalcInput(lines = lines, serviceKopecks = -1),
+                CalcInput(lines = lines, tipKopecks = -1),
+                CalcInput(lines = emptyList(), serviceKopecks = 1),
+                CalcInput(lines = emptyList(), tipKopecks = 1),
+            )
 
         for (input in badInputs) {
             assertThrows(IllegalArgumentException::class.java) { ShareCalculator.calculate(input) }
-            assertThrows(IllegalArgumentException::class.java) { ShareCalculator.calculate(input, roundToRuble = false) }
+            assertThrows(
+                IllegalArgumentException::class.java,
+            ) { ShareCalculator.calculate(input, roundToRuble = false) }
             assertThrows(IllegalArgumentException::class.java) { ShareCalculator.totalExact(input) }
             assertThrows(IllegalArgumentException::class.java) { ShareCalculator.totalWithPercentTip(input, 10) }
         }
@@ -227,12 +243,14 @@ class ShareCalculatorTest {
 
     @Test
     fun `переполнение суммы позиций отклоняется`() {
-        val input = CalcInput(
-            lines = listOf(
-                CalcLine(amountKopecks = Long.MAX_VALUE, shareNumerator = 1, shareDenominator = 1),
-                CalcLine(amountKopecks = Long.MAX_VALUE, shareNumerator = 1, shareDenominator = 1),
-            ),
-        )
+        val input =
+            CalcInput(
+                lines =
+                    listOf(
+                        CalcLine(amountKopecks = Long.MAX_VALUE, shareNumerator = 1, shareDenominator = 1),
+                        CalcLine(amountKopecks = Long.MAX_VALUE, shareNumerator = 1, shareDenominator = 1),
+                    ),
+            )
 
         assertThrows(IllegalArgumentException::class.java) { ShareCalculator.calculate(input) }
     }

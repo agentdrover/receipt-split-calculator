@@ -31,9 +31,15 @@ data class HistoryEntry(
 
 /** Чтение истории: «нет данных» — это не ошибка и не повод что-то затирать. */
 sealed interface HistoryLoad {
-    data class Data(val entries: List<HistoryEntry>) : HistoryLoad
+    data class Data(
+        val entries: List<HistoryEntry>,
+    ) : HistoryLoad
+
     data object NoData : HistoryLoad
-    data class ReadFailure(val cause: Throwable? = null) : HistoryLoad
+
+    data class ReadFailure(
+        val cause: Throwable? = null,
+    ) : HistoryLoad
 }
 
 /**
@@ -43,14 +49,25 @@ sealed interface HistoryLoad {
  * записью его байты остались копией на устройстве.
  */
 sealed interface SaveOutcome {
-    data class Saved(val entries: List<HistoryEntry>, val preservedCopy: Boolean = false) : SaveOutcome
-    data class ReadFailure(val cause: Throwable? = null) : SaveOutcome
+    data class Saved(
+        val entries: List<HistoryEntry>,
+        val preservedCopy: Boolean = false,
+    ) : SaveOutcome
+
+    data class ReadFailure(
+        val cause: Throwable? = null,
+    ) : SaveOutcome
 }
 
 /** Удаление: при нечитаемой истории файл не переписывается, иначе удалять нечего. */
 sealed interface DeleteOutcome {
-    data class Deleted(val entries: List<HistoryEntry>) : DeleteOutcome
-    data class ReadFailure(val cause: Throwable? = null) : DeleteOutcome
+    data class Deleted(
+        val entries: List<HistoryEntry>,
+    ) : DeleteOutcome
+
+    data class ReadFailure(
+        val cause: Throwable? = null,
+    ) : DeleteOutcome
 }
 
 /**
@@ -69,11 +86,11 @@ class HistoryStore(
         source.copyTo(target, overwrite = false)
     },
 ) {
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
     // Замок общий для всех экземпляров: после поворота Activity создаёт новый
     // store, а запись, начатая старым, всё ещё может выполняться.
@@ -81,31 +98,34 @@ class HistoryStore(
 
     fun load(): HistoryLoad = synchronized(lock) { read() }
 
-    fun save(entry: HistoryEntry): SaveOutcome = synchronized(lock) {
-        when (val current = read()) {
-            is HistoryLoad.ReadFailure -> saveAfterReadFailure(entry, current)
-            is HistoryLoad.Data -> writeEntry(entry, current.entries, preservedCopy = false)
-            HistoryLoad.NoData -> writeEntry(entry, emptyList(), preservedCopy = false)
-        }
-    }
-
-    fun delete(id: String): DeleteOutcome = synchronized(lock) {
-        when (val current = read()) {
-            is HistoryLoad.ReadFailure -> DeleteOutcome.ReadFailure(current.cause)
-            HistoryLoad.NoData -> DeleteOutcome.Deleted(emptyList())
-            is HistoryLoad.Data -> {
-                val updated = current.entries.filterNot { it.id == id }
-                write(updated)
-                DeleteOutcome.Deleted(updated)
+    fun save(entry: HistoryEntry): SaveOutcome =
+        synchronized(lock) {
+            when (val current = read()) {
+                is HistoryLoad.ReadFailure -> saveAfterReadFailure(entry, current)
+                is HistoryLoad.Data -> writeEntry(entry, current.entries, preservedCopy = false)
+                HistoryLoad.NoData -> writeEntry(entry, emptyList(), preservedCopy = false)
             }
         }
-    }
+
+    fun delete(id: String): DeleteOutcome =
+        synchronized(lock) {
+            when (val current = read()) {
+                is HistoryLoad.ReadFailure -> DeleteOutcome.ReadFailure(current.cause)
+                HistoryLoad.NoData -> DeleteOutcome.Deleted(emptyList())
+                is HistoryLoad.Data -> {
+                    val updated = current.entries.filterNot { it.id == id }
+                    write(updated)
+                    DeleteOutcome.Deleted(updated)
+                }
+            }
+        }
 
     /** Очистка — явное удаление: файл стирается без чтения и без копии. */
-    fun clear(): List<HistoryEntry> = synchronized(lock) {
-        write(emptyList())
-        emptyList()
-    }
+    fun clear(): List<HistoryEntry> =
+        synchronized(lock) {
+            write(emptyList())
+            emptyList()
+        }
 
     private fun writeEntry(
         entry: HistoryEntry,
@@ -164,11 +184,12 @@ class HistoryStore(
     private fun copyTarget(): File? {
         val parent = file.absoluteFile.parentFile ?: return null
         for (index in 1..MAX_COPIES) {
-            val name = if (index == 1) {
-                "${file.name}$CORRUPT_SUFFIX"
-            } else {
-                "${file.name}$CORRUPT_SUFFIX.$index"
-            }
+            val name =
+                if (index == 1) {
+                    "${file.name}$CORRUPT_SUFFIX"
+                } else {
+                    "${file.name}$CORRUPT_SUFFIX.$index"
+                }
             val candidate = File(parent, name)
             if (!candidate.exists()) return candidate
         }

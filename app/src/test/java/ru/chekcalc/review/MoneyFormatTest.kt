@@ -6,7 +6,6 @@ import ru.chekcalc.ui.review.formatKopecks
 import ru.chekcalc.ui.review.formatRublesGrouped
 
 class MoneyFormatTest {
-
     @Test
     fun `сумма с копейками и разрядами как в макете`() {
         assertEquals("1 240,00 ₽", formatKopecks(124_000))

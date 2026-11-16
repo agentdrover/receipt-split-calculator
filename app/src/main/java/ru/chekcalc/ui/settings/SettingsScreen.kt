@@ -19,8 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -36,6 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -44,9 +47,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -97,22 +97,24 @@ fun SettingsScreen(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 22.dp, vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 22.dp, vertical = 8.dp),
     ) {
         BackButton(onClick = onBack)
         Text(
             text = "Настройки",
-            style = MaterialTheme.typography.headlineLarge.copy(
-                fontFamily = FontFamily.Serif,
-                fontSize = 33.sp,
-                lineHeight = 35.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.6).sp,
-            ),
+            style =
+                MaterialTheme.typography.headlineLarge.copy(
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 33.sp,
+                    lineHeight = 35.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = (-0.6).sp,
+                ),
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(top = 2.dp),
         )
@@ -130,11 +132,12 @@ fun SettingsScreen(
             GroupCard {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { expanded = !expanded }
-                        .heightIn(min = 56.dp)
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = !expanded }
+                            .heightIn(min = 56.dp)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -197,10 +200,11 @@ fun SettingsScreen(
         GroupCard {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 52.dp)
-                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp)
+                        .padding(horizontal = 16.dp, vertical = 13.dp),
             ) {
                 Text(
                     text = "Ключ ${provider.title}",
@@ -212,24 +216,27 @@ fun SettingsScreen(
                     value = apiKey,
                     onValueChange = { apiKey = it },
                     singleLine = true,
-                    textStyle = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.5.sp,
-                        color = palette.muted,
-                        textAlign = TextAlign.End,
-                    ),
+                    textStyle =
+                        TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.5.sp,
+                            color = palette.muted,
+                            textAlign = TextAlign.End,
+                        ),
                     cursorBrush = SolidColor(palette.hero),
-                    visualTransformation = if (saved.apiKey.isEmpty()) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
+                    visualTransformation =
+                        if (saved.apiKey.isEmpty()) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     // TalkBack должен назвать поле, иначе строка читается как значение.
-                    modifier = Modifier
-                        .fillMaxWidth(0.55f)
-                        .clipToBounds()
-                        .semantics { contentDescription = "Ключ ${provider.title}" },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(0.55f)
+                            .clipToBounds()
+                            .semantics { contentDescription = "Ключ ${provider.title}" },
                 )
             }
         }
@@ -243,33 +250,34 @@ fun SettingsScreen(
         // Переключатель имеет смысл только там, где провайдер понимает флаг.
         val supportsDeep = isOfficialDeepSeek(baseUrl)
         if (supportsDeep) {
-        Caption("Распознавание", topPadding = 16.dp)
-        GroupCard {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Глубокое распознавание",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "Медленнее, но точнее: на длинном мятом чеке находит " +
-                            "строки, которые быстрый режим теряет. Замер: 14,4 с и 99 % " +
-                            "против 4,0 с и 84 %.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = palette.muted,
-                        modifier = Modifier.padding(top = 2.dp),
+            Caption("Распознавание", topPadding = 16.dp)
+            GroupCard {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Глубокое распознавание",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text =
+                                "Медленнее, но точнее: на длинном мятом чеке находит " +
+                                    "строки, которые быстрый режим теряет. Замер: 14,4 с и 99 % " +
+                                    "против 4,0 с и 84 %.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.muted,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    Switch(
+                        checked = deepThinking,
+                        onCheckedChange = { deepThinking = it },
                     )
                 }
-                Switch(
-                    checked = deepThinking,
-                    onCheckedChange = { deepThinking = it },
-                )
             }
-        }
         }
 
         Row(
@@ -281,22 +289,24 @@ fun SettingsScreen(
                 primary = true,
                 modifier = Modifier.weight(1f),
                 onClick = {
-                    val input = ProviderSettings(
-                        providerId = provider.id,
-                        apiKey = apiKey,
-                        baseUrl = baseUrl,
-                        model = model,
-                        deepThinking = deepThinking,
-                    )
+                    val input =
+                        ProviderSettings(
+                            providerId = provider.id,
+                            apiKey = apiKey,
+                            baseUrl = baseUrl,
+                            model = model,
+                            deepThinking = deepThinking,
+                        )
                     when (val result = repository.save(input)) {
                         is SaveResult.InvalidUrl -> message = result.reason
                         is SaveResult.Saved -> {
                             apply(repository.load())
-                            message = if (result.keyReentryRequired) {
-                                "Адрес изменён — введите ключ заново"
-                            } else {
-                                "Сохранено"
-                            }
+                            message =
+                                if (result.keyReentryRequired) {
+                                    "Адрес изменён — введите ключ заново"
+                                } else {
+                                    "Сохранено"
+                                }
                         }
                     }
                 },
@@ -318,17 +328,19 @@ fun SettingsScreen(
                             val targetProvider = provider
                             checking = true
                             scope.launch {
-                                val result = withContext(Dispatchers.IO) {
-                                    probe.check(target.baseUrl, target.apiKey, targetProvider.probePath)
-                                }
+                                val result =
+                                    withContext(Dispatchers.IO) {
+                                        probe.check(target.baseUrl, target.apiKey, targetProvider.probePath)
+                                    }
                                 checking = false
                                 // Пока шла проверка, провайдера могли переключить:
                                 // чужой ответ на экране не показываем.
                                 if (provider == targetProvider) {
-                                    message = when (result) {
-                                        is ProbeResult.Ok -> "Провайдер отвечает, ключ принят"
-                                        is ProbeResult.Failed -> result.reason
-                                    }
+                                    message =
+                                        when (result) {
+                                            is ProbeResult.Ok -> "Провайдер отвечает, ключ принят"
+                                            is ProbeResult.Failed -> result.reason
+                                        }
                                 }
                             }
                         }
@@ -356,13 +368,20 @@ fun SettingsScreen(
 }
 
 /** Глубокий режим понимает только официальный DeepSeek: чужие шлюзы поле могут не знать. */
-private fun isOfficialDeepSeek(baseUrl: String): Boolean = runCatching {
-    java.net.URI(baseUrl.trim().trimEnd('/')).host?.trimEnd('.')
-        ?.equals("api.deepseek.com", ignoreCase = true) == true
-}.getOrDefault(false)
+private fun isOfficialDeepSeek(baseUrl: String): Boolean =
+    runCatching {
+        java.net
+            .URI(baseUrl.trim().trimEnd('/'))
+            .host
+            ?.trimEnd('.')
+            ?.equals("api.deepseek.com", ignoreCase = true) == true
+    }.getOrDefault(false)
 
 @Composable
-private fun Caption(text: String, topPadding: androidx.compose.ui.unit.Dp = 12.dp) {
+private fun Caption(
+    text: String,
+    topPadding: androidx.compose.ui.unit.Dp = 12.dp,
+) {
     val palette = LocalChekPalette.current
     Text(
         text = text.uppercase(),
@@ -373,12 +392,16 @@ private fun Caption(text: String, topPadding: androidx.compose.ui.unit.Dp = 12.d
 }
 
 @Composable
-private fun GroupCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun GroupCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surface),
     ) {
         content()
     }
@@ -394,10 +417,11 @@ private fun ValueRow(
     val palette = LocalChekPalette.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .padding(horizontal = 16.dp, vertical = 11.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 16.dp, vertical = 11.dp),
     ) {
         Text(
             text = label,
@@ -409,19 +433,21 @@ private fun ValueRow(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
-            textStyle = TextStyle(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.End,
-            ),
+            textStyle =
+                TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.End,
+                ),
             cursorBrush = SolidColor(palette.hero),
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            modifier = Modifier
-                .fillMaxWidth(0.62f)
-                .clipToBounds()
-                .semantics { contentDescription = label },
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.62f)
+                    .clipToBounds()
+                    .semantics { contentDescription = label },
         )
     }
 }
@@ -441,12 +467,13 @@ private fun PillButton(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(background)
-            .clickable(enabled = enabled, onClick = onClick)
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(18.dp))
+                .background(background)
+                .clickable(enabled = enabled, onClick = onClick)
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 12.dp, vertical = 14.dp),
     ) {
         Text(
             text = text,

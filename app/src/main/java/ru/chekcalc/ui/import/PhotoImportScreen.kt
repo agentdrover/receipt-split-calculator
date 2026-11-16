@@ -27,8 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -43,8 +43,8 @@ import ru.chekcalc.image.PhotoCompressor
 import ru.chekcalc.image.PhotoOrientation
 import ru.chekcalc.image.PhotoSizing
 import ru.chekcalc.model.Receipt
-import java.io.File
 import ru.chekcalc.ui.components.BackButton
+import java.io.File
 
 /**
  * Импорт чека: камера или галерея, затем подготовка фото к отправке.
@@ -122,16 +122,17 @@ fun PhotoImportScreen(
                 canRetry = true
                 return@launch
             }
-            val result = withContext(Dispatchers.IO) {
-                try {
-                    recognize(photo)
-                } catch (failure: Exception) {
-                    RecognitionResult.Failure(
-                        ru.chekcalc.api.FailureKind.INVALID_RESPONSE,
-                        failure.message ?: "не удалось подготовить фото",
-                    )
+            val result =
+                withContext(Dispatchers.IO) {
+                    try {
+                        recognize(photo)
+                    } catch (failure: Exception) {
+                        RecognitionResult.Failure(
+                            ru.chekcalc.api.FailureKind.INVALID_RESPONSE,
+                            failure.message ?: "не удалось подготовить фото",
+                        )
+                    }
                 }
-            }
             sending = false
             when (result) {
                 is RecognitionResult.Success -> {
@@ -149,49 +150,52 @@ fun PhotoImportScreen(
         }
     }
 
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        if (ok) {
-            // Успешная съёмка заменяет прежний снимок, только теперь его удаляем.
-            deletePickedCapture()
-            pendingPath?.let {
-                capturePath = it
-                pickedUri = Uri.fromFile(File(it)).toString()
+    val cameraLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+            if (ok) {
+                // Успешная съёмка заменяет прежний снимок, только теперь его удаляем.
+                deletePickedCapture()
+                pendingPath?.let {
+                    capturePath = it
+                    pickedUri = Uri.fromFile(File(it)).toString()
+                }
+                message = null
+                needsNewPhoto = false
+                canRetry = false
+                failedUri = null
+            } else {
+                // Отмена: удаляем только что созданный файл, выбранное фото не трогаем.
+                pendingPath?.let { runCatching { File(it).delete() } }
+                message = "Съёмка отменена"
             }
-            message = null
-            needsNewPhoto = false
-            canRetry = false
-            failedUri = null
-        } else {
-            // Отмена: удаляем только что созданный файл, выбранное фото не трогаем.
-            pendingPath?.let { runCatching { File(it).delete() } }
-            message = "Съёмка отменена"
+            pendingPath = null
         }
-        pendingPath = null
-    }
 
-    val galleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
-        if (uri != null) {
-            deletePickedCapture()
-            pickedUri = uri.toString()
-            message = null
-            canRetry = false
-            // То же самое фото после неповторяемой ошибки не считается новым:
-            // запоминаем его, пока не выберут другое.
-            // Проваленное фото остаётся проваленным, пока не будет нового кадра:
-            // выбор A → B → A не должен разблокировать отправку A.
-            needsNewPhoto = uri.toString() == failedUri
+    val galleryLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.PickVisualMedia(),
+        ) { uri ->
+            if (uri != null) {
+                deletePickedCapture()
+                pickedUri = uri.toString()
+                message = null
+                canRetry = false
+                // То же самое фото после неповторяемой ошибки не считается новым:
+                // запоминаем его, пока не выберут другое.
+                // Проваленное фото остаётся проваленным, пока не будет нового кадра:
+                // выбор A → B → A не должен разблокировать отправку A.
+                needsNewPhoto = uri.toString() == failedUri
+            }
         }
-    }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            // Android 15: контент не должен уходить под системные панели.
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(22.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                // Android 15: контент не должен уходить под системные панели.
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .verticalScroll(rememberScrollState())
+                .padding(22.dp),
     ) {
         BackButton(onClick = { leave() })
         Text("Чек", style = MaterialTheme.typography.headlineSmall)
@@ -204,16 +208,18 @@ fun PhotoImportScreen(
         Button(
             enabled = !sending,
             onClick = {
-                val file = File(
-                    File(context.cacheDir, "photos").apply { mkdirs() },
-                    "receipt-${System.currentTimeMillis()}.jpg",
-                )
+                val file =
+                    File(
+                        File(context.cacheDir, "photos").apply { mkdirs() },
+                        "receipt-${System.currentTimeMillis()}.jpg",
+                    )
                 pendingPath = file.absolutePath
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    file,
-                )
+                val uri =
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
                 val launched = runCatching { cameraLauncher.launch(uri) }.isSuccess
                 if (!launched) {
                     // На устройстве без камеры intent не находится.
@@ -280,15 +286,21 @@ fun PhotoImportScreen(
 }
 
 /** Предпросмотр не тянет полное фото в память: уменьшаем по длинной стороне. */
-internal fun loadPreview(context: Context, uri: Uri): Bitmap? = runCatching {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-    val sample = PhotoSizing.inSampleSize(bounds.outWidth, bounds.outHeight, PREVIEW_SIDE)
-    val options = BitmapFactory.Options().apply { inSampleSize = sample }
-    val decoded = context.contentResolver.openInputStream(uri)
-        ?.use { BitmapFactory.decodeStream(it, null, options) } ?: return@runCatching null
-    val orientation = PhotoOrientation.read { context.contentResolver.openInputStream(uri) }
-    PhotoOrientation.apply(decoded, orientation)
-}.getOrNull()
+internal fun loadPreview(
+    context: Context,
+    uri: Uri,
+): Bitmap? =
+    runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        val sample = PhotoSizing.inSampleSize(bounds.outWidth, bounds.outHeight, PREVIEW_SIDE)
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        val decoded =
+            context.contentResolver
+                .openInputStream(uri)
+                ?.use { BitmapFactory.decodeStream(it, null, options) } ?: return@runCatching null
+        val orientation = PhotoOrientation.read { context.contentResolver.openInputStream(uri) }
+        PhotoOrientation.apply(decoded, orientation)
+    }.getOrNull()
 
 private const val PREVIEW_SIDE = 1024

@@ -11,16 +11,18 @@ import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.TotalsEditState
 
 class ReviewEditStateTest {
-
-    private fun draft(): ReceiptDraft = ReceiptDraft(
-        items = listOf(DraftItem(1, "Кофе", 2.0, 18_000)),
-        totalKopecks = 36_000,
-    )
+    private fun draft(): ReceiptDraft =
+        ReceiptDraft(
+            items = listOf(DraftItem(1, "Кофе", 2.0, 18_000)),
+            totalKopecks = 36_000,
+        )
 
     @Test
     fun `правка существующей позиции меняет название, количество и цену`() {
-        val state = ItemEditState.of(draft().items.single())
-            .copy(name = "Кофе с молоком", qtyText = "3", priceText = "200")
+        val state =
+            ItemEditState
+                .of(draft().items.single())
+                .copy(name = "Кофе с молоком", qtyText = "3", priceText = "200")
 
         val item = state.apply(draft()).items.single()
 
@@ -72,11 +74,12 @@ class ReviewEditStateTest {
 
     @Test
     fun `лист итогов сохраняет три суммы`() {
-        val state = TotalsEditState.of(draft()).copy(
-            totalText = "1 000",
-            discountText = "100",
-            serviceText = "50",
-        )
+        val state =
+            TotalsEditState.of(draft()).copy(
+                totalText = "1 000",
+                discountText = "100",
+                serviceText = "50",
+            )
 
         assertTrue(state.valid)
         val updated = state.apply(draft())
@@ -96,12 +99,13 @@ class ReviewEditStateTest {
 
     @Test
     fun `скидка больше суммы позиций делает лист невалидным`() {
-        val state = TotalsEditState(
-            totalText = "1000",
-            discountText = "1200",
-            serviceText = "0",
-            itemsSumKopecks = 100_000,
-        )
+        val state =
+            TotalsEditState(
+                totalText = "1000",
+                discountText = "1200",
+                serviceText = "0",
+                itemsSumKopecks = 100_000,
+            )
 
         assertTrue(!state.valid)
         assertTrue(state.discountTooBig)
@@ -109,12 +113,13 @@ class ReviewEditStateTest {
 
     @Test
     fun `скидка ровно 100 процентов валидна`() {
-        val state = TotalsEditState(
-            totalText = "0",
-            discountText = "1000",
-            serviceText = "0",
-            itemsSumKopecks = 100_000,
-        )
+        val state =
+            TotalsEditState(
+                totalText = "0",
+                discountText = "1000",
+                serviceText = "0",
+                itemsSumKopecks = 100_000,
+            )
 
         assertTrue(state.valid)
         assertTrue(!state.discountTooBig)
@@ -122,28 +127,31 @@ class ReviewEditStateTest {
 
     @Test
     fun `невалидная скидка не меняет черновик`() {
-        val draft = ReceiptDraft(
-            items = listOf(DraftItem(1, "Кофе", 1.0, 100_000)),
-            totalKopecks = 100_000,
-        )
-        val state = TotalsEditState(
-            totalText = "1000",
-            discountText = "1200",
-            serviceText = "0",
-            itemsSumKopecks = 100_000,
-        )
+        val draft =
+            ReceiptDraft(
+                items = listOf(DraftItem(1, "Кофе", 1.0, 100_000)),
+                totalKopecks = 100_000,
+            )
+        val state =
+            TotalsEditState(
+                totalText = "1000",
+                discountText = "1200",
+                serviceText = "0",
+                itemsSumKopecks = 100_000,
+            )
 
         assertEquals(draft, state.apply(draft))
     }
 
     @Test
     fun `старое состояние без суммы позиций не блокирует скидку`() {
-        val state = TotalsEditState(
-            totalText = "1000",
-            discountText = "200",
-            serviceText = "0",
-            itemsSumKopecks = null,
-        )
+        val state =
+            TotalsEditState(
+                totalText = "1000",
+                discountText = "200",
+                serviceText = "0",
+                itemsSumKopecks = null,
+            )
 
         assertTrue(state.valid)
         assertTrue(!state.discountTooBig)

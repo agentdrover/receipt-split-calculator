@@ -7,7 +7,6 @@ import ru.chekcalc.ui.home.pendingLabel
 import ru.chekcalc.ui.home.positionsLabel
 
 class LabelsTest {
-
     @Test
     fun `позиции склоняются по числу`() {
         assertEquals("1 позиция", positionsLabel(1))

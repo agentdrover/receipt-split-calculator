@@ -14,23 +14,25 @@ private val Paper = Color(0xFFF6F1E7)
 private val Ink = Color(0xFF17150F)
 private val Green = Color(0xFF14503C)
 
-private val LightColors = lightColorScheme(
-    primary = Green,
-    onPrimary = Color(0xFFF3EFE5),
-    background = Paper,
-    onBackground = Ink,
-    surface = Color.White,
-    onSurface = Ink,
-)
+private val LightColors =
+    lightColorScheme(
+        primary = Green,
+        onPrimary = Color(0xFFF3EFE5),
+        background = Paper,
+        onBackground = Ink,
+        surface = Color.White,
+        onSurface = Ink,
+    )
 
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFF6FBFA0),
-    onPrimary = Color(0xFF0E2C22),
-    background = Color(0xFF14120E),
-    onBackground = Color(0xFFEDE7DC),
-    surface = Color(0xFF1D1A15),
-    onSurface = Color(0xFFEDE7DC),
-)
+private val DarkColors =
+    darkColorScheme(
+        primary = Color(0xFF6FBFA0),
+        onPrimary = Color(0xFF0E2C22),
+        background = Color(0xFF14120E),
+        onBackground = Color(0xFFEDE7DC),
+        surface = Color(0xFF1D1A15),
+        onSurface = Color(0xFFEDE7DC),
+    )
 
 /**
  * Цвета, которых нет в Material-схеме, но они есть в макете:
@@ -46,23 +48,25 @@ data class ChekPalette(
     val glyph: Color,
 )
 
-private val LightPalette = ChekPalette(
-    hero = Green,
-    heroInk = Color(0xFFF3EFE5),
-    line = Color(0xFFE7DFCF),
-    muted = Color(0xFF726C5E),
-    faint = Color(0xFF9A9384),
-    glyph = Green,
-)
+private val LightPalette =
+    ChekPalette(
+        hero = Green,
+        heroInk = Color(0xFFF3EFE5),
+        line = Color(0xFFE7DFCF),
+        muted = Color(0xFF726C5E),
+        faint = Color(0xFF9A9384),
+        glyph = Green,
+    )
 
-private val DarkPalette = ChekPalette(
-    hero = Color(0xFF1C6A4F),
-    heroInk = Color(0xFFF3EFE5),
-    line = Color(0xFF2E2A22),
-    muted = Color(0xFFA79F8E),
-    faint = Color(0xFF6E6758),
-    glyph = Color(0xFF7FC6A8),
-)
+private val DarkPalette =
+    ChekPalette(
+        hero = Color(0xFF1C6A4F),
+        heroInk = Color(0xFFF3EFE5),
+        line = Color(0xFF2E2A22),
+        muted = Color(0xFFA79F8E),
+        faint = Color(0xFF6E6758),
+        glyph = Color(0xFF7FC6A8),
+    )
 
 val LocalChekPalette = staticCompositionLocalOf { LightPalette }
 

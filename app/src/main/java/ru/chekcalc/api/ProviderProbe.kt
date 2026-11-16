@@ -7,7 +7,10 @@ import java.util.concurrent.TimeUnit
 
 sealed interface ProbeResult {
     data object Ok : ProbeResult
-    data class Failed(val reason: String) : ProbeResult
+
+    data class Failed(
+        val reason: String,
+    ) : ProbeResult
 }
 
 /**
@@ -17,20 +20,28 @@ sealed interface ProbeResult {
  * принимает ли провайдер ключ и адрес.
  */
 class ProviderProbe(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build(),
+    private val client: OkHttpClient =
+        OkHttpClient
+            .Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build(),
 ) {
-    fun check(baseUrl: String, apiKey: String, probePath: String = "models"): ProbeResult {
+    fun check(
+        baseUrl: String,
+        apiKey: String,
+        probePath: String = "models",
+    ): ProbeResult {
         val url = baseUrl.trim().trimEnd('/') + "/" + probePath.trimStart('/')
 
         return try {
-            val request = Request.Builder()
-                .url(url)
-                .header("Authorization", "Bearer $apiKey")
-                .get()
-                .build()
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $apiKey")
+                    .get()
+                    .build()
 
             client.newCall(request).execute().use { response ->
                 when (response.code) {

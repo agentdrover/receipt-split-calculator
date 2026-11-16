@@ -1,28 +1,28 @@
 package ru.chekcalc.ui.select
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,10 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import ru.chekcalc.calc.Money
+import ru.chekcalc.ui.components.BackButton
 import ru.chekcalc.ui.review.parseRubles
 import ru.chekcalc.ui.review.rublesText
-import androidx.activity.compose.BackHandler
-import ru.chekcalc.ui.components.BackButton
 
 /**
  * Экран «Что ваше»: отметки позиций, доли общих и чаевые.
@@ -54,15 +53,26 @@ fun SelectionScreen(
     // Системный Back и жест возвращают к проверке, а не закрывают приложение.
     BackHandler { onBack() }
 
-    var tipText by rememberSaveable { mutableStateOf(if (state.tipFixedKopecks > 0) rublesText(state.tipFixedKopecks) else "") }
+    var tipText by rememberSaveable {
+        mutableStateOf(
+            if (state.tipFixedKopecks >
+                0
+            ) {
+                rublesText(state.tipFixedKopecks)
+            } else {
+                ""
+            },
+        )
+    }
 
     // Android 15 принудительно edge-to-edge: без инсетов «Назад» уходит под
     // статус-бар, а «Дальше» — под панель навигации.
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(22.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(22.dp),
     ) {
         BackButton(onClick = onBack)
         Text("Что ваше", style = MaterialTheme.typography.headlineSmall)
@@ -94,9 +104,10 @@ fun SelectionScreen(
                         if (whole || shared != null) {
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier
-                                    .padding(start = 48.dp, top = 4.dp)
-                                    .horizontalScroll(rememberScrollState()),
+                                modifier =
+                                    Modifier
+                                        .padding(start = 48.dp, top = 4.dp)
+                                        .horizontalScroll(rememberScrollState()),
                             ) {
                                 state.denominatorChoices.forEach { denominator ->
                                     FilterChip(
@@ -129,13 +140,14 @@ fun SelectionScreen(
                 )
             }
         }
-        val tipCaption = when {
-            state.tipPercent != null && state.tipKopecks > 0 ->
-                "% от вашей части: ${Money.format(state.tipKopecks, state.currency)}"
-            state.tipPercent != null -> "% от вашей части"
-            state.tipKopecks > 0 -> "своя сумма: ${Money.format(state.tipKopecks, state.currency)}"
-            else -> "% от вашей части"
-        }
+        val tipCaption =
+            when {
+                state.tipPercent != null && state.tipKopecks > 0 ->
+                    "% от вашей части: ${Money.format(state.tipKopecks, state.currency)}"
+                state.tipPercent != null -> "% от вашей части"
+                state.tipKopecks > 0 -> "своя сумма: ${Money.format(state.tipKopecks, state.currency)}"
+                else -> "% от вашей части"
+            }
         Text(
             text = tipCaption,
             style = MaterialTheme.typography.bodySmall,
@@ -156,11 +168,12 @@ fun SelectionScreen(
             label = { Text("Своя сумма чаевых") },
             singleLine = true,
             isError = tipInvalid,
-            supportingText = if (tipInvalid) {
-                { Text("Введите число") }
-            } else {
-                null
-            },
+            supportingText =
+                if (tipInvalid) {
+                    { Text("Введите число") }
+                } else {
+                    null
+                },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )

@@ -20,8 +20,7 @@ data class PhotoViewState(
     }
 
     /** Сдвиг пальцем: на исходном масштабе фото и так целиком, сдвиг не нужен. */
-    fun pan(delta: Offset): PhotoViewState =
-        if (scale <= MIN_SCALE) this else copy(offset = offset + delta)
+    fun pan(delta: Offset): PhotoViewState = if (scale <= MIN_SCALE) this else copy(offset = offset + delta)
 
     fun reset(): PhotoViewState = PhotoViewState()
 

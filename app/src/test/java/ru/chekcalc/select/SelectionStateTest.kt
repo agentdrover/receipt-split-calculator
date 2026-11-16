@@ -9,12 +9,14 @@ import ru.chekcalc.ui.select.Choice
 import ru.chekcalc.ui.select.SelectionState
 
 class SelectionStateTest {
-
-    private fun state(vararg amounts: Long): SelectionState = SelectionState(
-        items = amounts.mapIndexed { index, amount ->
-            ru.chekcalc.ui.select.SelectableItem(index + 1L, "Позиция ${index + 1}", amount)
-        },
-    )
+    private fun state(vararg amounts: Long): SelectionState =
+        SelectionState(
+            items =
+                amounts.mapIndexed { index, amount ->
+                    ru.chekcalc.ui.select
+                        .SelectableItem(index + 1L, "Позиция ${index + 1}", amount)
+                },
+        )
 
     @Test
     fun `по умолчанию ничего не отмечено и сумма ноль`() {
@@ -88,13 +90,17 @@ class SelectionStateTest {
     @Test
     fun `скидка на чужую позицию тоже распределяется`() {
         // Моя 100 ₽, чужая 10 ₽, скидка 0,50 ₽ на весь чек, чаевые 10 %.
-        val selected = SelectionState(
-            items = listOf(
-                ru.chekcalc.ui.select.SelectableItem(1, "Моя", 10_000, Choice.Whole),
-                ru.chekcalc.ui.select.SelectableItem(2, "Чужая", 1_000, Choice.None),
-            ),
-            discountKopecks = 50,
-        ).setTipPercent(10)
+        val selected =
+            SelectionState(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.select
+                            .SelectableItem(1, "Моя", 10_000, Choice.Whole),
+                        ru.chekcalc.ui.select
+                            .SelectableItem(2, "Чужая", 1_000, Choice.None),
+                    ),
+                discountKopecks = 50,
+            ).setTipPercent(10)
 
         assertEquals(11_000L, selected.totalKopecks)
     }
@@ -102,13 +108,17 @@ class SelectionStateTest {
     @Test
     fun `итог на ровной границе считается одной дробью`() {
         // Позиции 20 + 3 ₽, моя 20 ₽, скидка 2,50 ₽, чаевые 15 % → ровно 20,50 ₽ → 21 ₽.
-        val selected = SelectionState(
-            items = listOf(
-                ru.chekcalc.ui.select.SelectableItem(1, "Моя", 2_000, Choice.Whole),
-                ru.chekcalc.ui.select.SelectableItem(2, "Чужая", 300, Choice.None),
-            ),
-            discountKopecks = 250,
-        ).setTipPercent(15)
+        val selected =
+            SelectionState(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.select
+                            .SelectableItem(1, "Моя", 2_000, Choice.Whole),
+                        ru.chekcalc.ui.select
+                            .SelectableItem(2, "Чужая", 300, Choice.None),
+                    ),
+                discountKopecks = 250,
+            ).setTipPercent(15)
 
         assertEquals(2_100L, selected.totalKopecks)
     }
@@ -137,10 +147,11 @@ class SelectionStateTest {
 
     @Test
     fun `скидка и обслуживание распределяются до чаевых`() {
-        val selected = state(100_000)
-            .toggleWhole(1)
-            .copy(discountKopecks = 10_000, serviceKopecks = 5_000)
-            .setTipPercent(10)
+        val selected =
+            state(100_000)
+                .toggleWhole(1)
+                .copy(discountKopecks = 10_000, serviceKopecks = 5_000)
+                .setTipPercent(10)
 
         assertEquals(95_000L, selected.billShareKopecks)
         assertEquals(9_500L, selected.tipKopecks)
@@ -149,10 +160,11 @@ class SelectionStateTest {
 
     @Test
     fun `черновик проверки превращается в выбор без отметок`() {
-        val draft = ReceiptDraft(
-            items = listOf(DraftItem(1, "Кофе", 1.0, 30_000), DraftItem(2, "Торт", 1.0, 45_000)),
-            totalKopecks = 75_000,
-        )
+        val draft =
+            ReceiptDraft(
+                items = listOf(DraftItem(1, "Кофе", 1.0, 30_000), DraftItem(2, "Торт", 1.0, 45_000)),
+                totalKopecks = 75_000,
+            )
 
         val selected = SelectionState.fromDraft(draft)
 
@@ -163,17 +175,19 @@ class SelectionStateTest {
 
     @Test
     fun `восстановленная скидка больше позиций не роняет расчёт`() {
-        val state = SelectionState(
-            items = listOf(
-                ru.chekcalc.ui.select.SelectableItem(
-                    id = 1,
-                    name = "Кофе",
-                    amountKopecks = 100_000,
-                    choice = Choice.Whole,
-                ),
-            ),
-            discountKopecks = 120_000,
-        )
+        val state =
+            SelectionState(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.select.SelectableItem(
+                            id = 1,
+                            name = "Кофе",
+                            amountKopecks = 100_000,
+                            choice = Choice.Whole,
+                        ),
+                    ),
+                discountKopecks = 120_000,
+            )
 
         // Скидка подрезается до 100 %: ядро не бросает, итог не отрицательный.
         assertEquals(0, state.totalKopecks)
@@ -181,17 +195,19 @@ class SelectionStateTest {
 
     @Test
     fun `восстановленное обслуживание без позиций не роняет экран`() {
-        val state = SelectionState(
-            items = listOf(
-                ru.chekcalc.ui.select.SelectableItem(
-                    id = 1,
-                    name = "Нулевая строка",
-                    amountKopecks = 0,
-                    choice = Choice.Whole,
-                ),
-            ),
-            serviceKopecks = 10_000,
-        )
+        val state =
+            SelectionState(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.select.SelectableItem(
+                            id = 1,
+                            name = "Нулевая строка",
+                            amountKopecks = 0,
+                            choice = Choice.Whole,
+                        ),
+                    ),
+                serviceKopecks = 10_000,
+            )
 
         assertEquals(0, state.totalKopecks)
     }

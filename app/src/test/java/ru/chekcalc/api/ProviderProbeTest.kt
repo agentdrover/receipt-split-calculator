@@ -9,7 +9,6 @@ import org.junit.Before
 import org.junit.Test
 
 class ProviderProbeTest {
-
     private lateinit var server: MockWebServer
     private val probe = ProviderProbe()
 

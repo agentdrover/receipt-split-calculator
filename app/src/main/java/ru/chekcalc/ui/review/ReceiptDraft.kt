@@ -1,11 +1,11 @@
 package ru.chekcalc.ui.review
 
 import kotlinx.serialization.Serializable
-import java.math.BigDecimal
-import java.math.RoundingMode
 import ru.chekcalc.calc.Money
 import ru.chekcalc.calc.rublesToKopecks
 import ru.chekcalc.model.Receipt
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlin.math.abs
 
 /**
@@ -24,10 +24,12 @@ data class DraftItem(
      * Считаем в BigDecimal: 199 ₽ × 0,205 через Double даёт 40,79 вместо 40,80.
      */
     val amountKopecks: Long
-        get() = BigDecimal.valueOf(unitPriceKopecks)
-            .multiply(BigDecimal.valueOf(qty ?: 1.0))
-            .setScale(0, RoundingMode.HALF_UP)
-            .toLong()
+        get() =
+            BigDecimal
+                .valueOf(unitPriceKopecks)
+                .multiply(BigDecimal.valueOf(qty ?: 1.0))
+                .setScale(0, RoundingMode.HALF_UP)
+                .toLong()
 }
 
 /**
@@ -59,27 +61,36 @@ data class ReceiptDraft(
      * позиций — ошибка ввода, с которой считать нельзя.
      */
     val blockingError: String?
-        get() = when {
-            items.isEmpty() -> "В чеке нет ни одной позиции — добавьте строку или исправьте чек"
-            discountKopecks < 0 || serviceKopecks < 0 || totalKopecks < 0 ->
-                "Суммы не могут быть отрицательными — исправьте"
-            discountKopecks > itemsSumKopecks -> "Скидка больше суммы позиций — исправьте"
-            itemsSumKopecks == 0L && serviceKopecks > 0 ->
-                "Обслуживание без позиций — исправьте"
-            else -> null
-        }
+        get() =
+            when {
+                items.isEmpty() -> "В чеке нет ни одной позиции — добавьте строку или исправьте чек"
+                discountKopecks < 0 || serviceKopecks < 0 || totalKopecks < 0 ->
+                    "Суммы не могут быть отрицательными — исправьте"
+                discountKopecks > itemsSumKopecks -> "Скидка больше суммы позиций — исправьте"
+                itemsSumKopecks == 0L && serviceKopecks > 0 ->
+                    "Обслуживание без позиций — исправьте"
+                else -> null
+            }
 
     /** «Дальше» блокируется только невозможными данными, не расхождением OCR. */
     val canProceed: Boolean get() = blockingError == null
 
-    fun rename(id: Long, name: String): ReceiptDraft =
-        copy(items = items.map { if (it.id == id) it.copy(name = name) else it })
+    fun rename(
+        id: Long,
+        name: String,
+    ): ReceiptDraft = copy(items = items.map { if (it.id == id) it.copy(name = name) else it })
 
-    fun changeUnitPrice(id: Long, kopecks: Long): ReceiptDraft =
+    fun changeUnitPrice(
+        id: Long,
+        kopecks: Long,
+    ): ReceiptDraft =
         copy(items = items.map { if (it.id == id) it.copy(unitPriceKopecks = kopecks.coerceAtLeast(0)) else it })
 
     /** Количество: цена за единицу сохраняется, сумма пересчитывается. */
-    fun changeQty(id: Long, qty: Double?): ReceiptDraft {
+    fun changeQty(
+        id: Long,
+        qty: Double?,
+    ): ReceiptDraft {
         require(qty == null || (qty.isFinite() && qty >= 0.0 && qty <= MAX_QTY)) {
             "количество должно быть числом от 0 до $MAX_QTY"
         }
@@ -92,7 +103,10 @@ data class ReceiptDraft(
 
     fun changeService(kopecks: Long): ReceiptDraft = copy(serviceKopecks = kopecks.coerceAtLeast(0))
 
-    fun addItem(name: String = "Новая позиция", unitPriceKopecks: Long = 0): ReceiptDraft {
+    fun addItem(
+        name: String = "Новая позиция",
+        unitPriceKopecks: Long = 0,
+    ): ReceiptDraft {
         val nextId = (items.maxOfOrNull { it.id } ?: 0L) + 1
         return copy(items = items + DraftItem(nextId, name, qty = 1.0, unitPriceKopecks = unitPriceKopecks))
     }
@@ -113,18 +127,19 @@ data class ReceiptDraft(
         // Подсказка называет только те поля, которые вообще участвуют в расчёте:
         // при скидке бессмысленно искать «пропущенную строку», а без неё —
         // отправлять человека к скидке.
-        val reason = when {
-            discountKopecks > 0 && serviceKopecks > 0 ->
-                "расхождение может быть в скидке, обслуживании или цене строки — проверьте их"
-            discountKopecks > 0 ->
-                "расхождение может быть в скидке или цене строки — проверьте их"
-            serviceKopecks > 0 ->
-                "расхождение может быть в обслуживании или цене строки — проверьте их"
-            residualKopecks > 0 ->
-                "в чеке больше — возможно, строка не распознана"
-            else ->
-                "в чеке меньше — возможно, цена строки прочитана неверно"
-        }
+        val reason =
+            when {
+                discountKopecks > 0 && serviceKopecks > 0 ->
+                    "расхождение может быть в скидке, обслуживании или цене строки — проверьте их"
+                discountKopecks > 0 ->
+                    "расхождение может быть в скидке или цене строки — проверьте их"
+                serviceKopecks > 0 ->
+                    "расхождение может быть в обслуживании или цене строки — проверьте их"
+                residualKopecks > 0 ->
+                    "в чеке больше — возможно, строка не распознана"
+                else ->
+                    "в чеке меньше — возможно, цена строки прочитана неверно"
+            }
         return "По позициям ожидалось ${Money.format(expected, currency)}, в чеке " +
             "${Money.format(totalKopecks, currency)}: разница " +
             "${Money.format(residualKopecks, currency)}. Причина: $reason."
@@ -142,19 +157,25 @@ data class ReceiptDraft(
          * разумное и воспроизводит сумму: иначе считаем позицию одной штукой,
          * чтобы распознанные деньги не потерялись и не утроились.
          */
-        fun draftItemFor(id: Long, item: ru.chekcalc.model.ReceiptItem): DraftItem {
+        fun draftItemFor(
+            id: Long,
+            item: ru.chekcalc.model.ReceiptItem,
+        ): DraftItem {
             val amountKopecks = rublesToKopecks(item.amount)
-            val qty = item.qty?.takeIf { it > 0.0 && it <= MAX_QTY } ?: return DraftItem(
-                id = id,
-                name = item.name,
-                qty = null,
-                unitPriceKopecks = amountKopecks,
-            )
+            val qty =
+                item.qty?.takeIf { it > 0.0 && it <= MAX_QTY } ?: return DraftItem(
+                    id = id,
+                    name = item.name,
+                    qty = null,
+                    unitPriceKopecks = amountKopecks,
+                )
             val candidate = item.unitPrice?.let { rublesToKopecks(it) } ?: Math.round(amountKopecks / qty)
-            val restored = BigDecimal.valueOf(candidate.toLong())
-                .multiply(BigDecimal.valueOf(qty))
-                .setScale(0, RoundingMode.HALF_UP)
-                .toLong()
+            val restored =
+                BigDecimal
+                    .valueOf(candidate.toLong())
+                    .multiply(BigDecimal.valueOf(qty))
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .toLong()
             return if (restored == amountKopecks) {
                 DraftItem(id, item.name, qty, candidate)
             } else {
@@ -162,40 +183,46 @@ data class ReceiptDraft(
             }
         }
 
-        fun fromReceipt(receipt: Receipt): ReceiptDraft = ReceiptDraft(
-            items = receipt.items.mapIndexed { index, item -> draftItemFor(index + 1L, item) },
-            // Как и RecognitionClient: сумма без present — это ноль, а не скидка.
-            discountKopecks = if (receipt.discount.present) {
-                rublesToKopecks(receipt.discount.amount)
-            } else {
-                0
-            },
-            serviceKopecks = if (receipt.serviceCharge.present) {
-                rublesToKopecks(receipt.serviceCharge.amount)
-            } else {
-                0
-            },
-            totalKopecks = rublesToKopecks(receipt.total),
-            currency = receipt.currency,
-        )
+        fun fromReceipt(receipt: Receipt): ReceiptDraft =
+            ReceiptDraft(
+                items = receipt.items.mapIndexed { index, item -> draftItemFor(index + 1L, item) },
+                // Как и RecognitionClient: сумма без present — это ноль, а не скидка.
+                discountKopecks =
+                    if (receipt.discount.present) {
+                        rublesToKopecks(receipt.discount.amount)
+                    } else {
+                        0
+                    },
+                serviceKopecks =
+                    if (receipt.serviceCharge.present) {
+                        rublesToKopecks(receipt.serviceCharge.amount)
+                    } else {
+                        0
+                    },
+                totalKopecks = rublesToKopecks(receipt.total),
+                currency = receipt.currency,
+            )
     }
 }
-
 
 /**
  * Что изменилось после глубокого распознавания: сколько позиций добавилось
  * и как поехало расхождение с итогом. Одной строкой, чтобы человек не
  * сравнивал два экрана глазами.
  */
-fun deepRecognizeSummary(before: ReceiptDraft, after: ReceiptDraft): String {
+fun deepRecognizeSummary(
+    before: ReceiptDraft,
+    after: ReceiptDraft,
+): String {
     val added = after.items.size - before.items.size
     val residualBefore = before.residualKopecks
     val residualAfter = after.residualKopecks
-    val items = when {
-        added > 0 -> "добавлено позиций: $added"
-        added < 0 -> "позиций стало меньше на ${-added}"
-        else -> "позиций столько же"
-    }
+    val items =
+        when {
+            added > 0 -> "добавлено позиций: $added"
+            added < 0 -> "позиций стало меньше на ${-added}"
+            else -> "позиций столько же"
+        }
     return if (residualBefore == residualAfter) {
         "$items; расхождение с итогом не изменилось"
     } else {

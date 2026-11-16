@@ -26,7 +26,8 @@ data class ItemEditState(
         val price = priceKopecks ?: return draft
         val quantity = qty
         return if (itemId != null) {
-            draft.rename(itemId, name.trim())
+            draft
+                .rename(itemId, name.trim())
                 .changeQty(itemId, quantity)
                 .changeUnitPrice(itemId, price)
         } else {
@@ -37,12 +38,13 @@ data class ItemEditState(
     }
 
     companion object {
-        fun of(item: DraftItem): ItemEditState = ItemEditState(
-            itemId = item.id,
-            name = item.name,
-            qtyText = item.qty?.let { formatQty(it) } ?: "",
-            priceText = rublesText(item.unitPriceKopecks),
-        )
+        fun of(item: DraftItem): ItemEditState =
+            ItemEditState(
+                itemId = item.id,
+                name = item.name,
+                qtyText = item.qty?.let { formatQty(it) } ?: "",
+                priceText = rublesText(item.unitPriceKopecks),
+            )
 
         fun new(): ItemEditState = ItemEditState()
     }
@@ -77,11 +79,12 @@ data class TotalsEditState(
     }
 
     companion object {
-        fun of(draft: ReceiptDraft): TotalsEditState = TotalsEditState(
-            totalText = rublesText(draft.totalKopecks),
-            discountText = rublesText(draft.discountKopecks),
-            serviceText = rublesText(draft.serviceKopecks),
-            itemsSumKopecks = draft.itemsSumKopecks,
-        )
+        fun of(draft: ReceiptDraft): TotalsEditState =
+            TotalsEditState(
+                totalText = rublesText(draft.totalKopecks),
+                discountText = rublesText(draft.discountKopecks),
+                serviceText = rublesText(draft.serviceKopecks),
+                itemsSumKopecks = draft.itemsSumKopecks,
+            )
     }
 }

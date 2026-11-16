@@ -2,8 +2,8 @@ package ru.chekcalc.ui.summary
 
 import kotlinx.serialization.Serializable
 import ru.chekcalc.calc.Money
-import ru.chekcalc.ui.select.Choice
 import ru.chekcalc.storage.Payer
+import ru.chekcalc.ui.select.Choice
 import ru.chekcalc.ui.select.SelectionState
 
 /**
@@ -24,13 +24,14 @@ data class ReceiptSummary(
     val sharedItems: Int = 0,
 ) {
     /** Строки разбивки: подпись и сумма; пустые строки не показываем. */
-    fun lines(): List<Pair<String, String>> = buildList {
-        add("Ваши позиции" to Money.format(itemsShareKopecks, currency))
-        if (discountKopecks > 0) add("Скидка" to "−" + Money.format(discountKopecks, currency))
-        if (serviceKopecks > 0) add("Обслуживание" to Money.format(serviceKopecks, currency))
-        if (tipKopecks > 0) add("Чаевые" to Money.format(tipKopecks, currency))
-        add("Итого" to Money.format(totalKopecks, currency))
-    }
+    fun lines(): List<Pair<String, String>> =
+        buildList {
+            add("Ваши позиции" to Money.format(itemsShareKopecks, currency))
+            if (discountKopecks > 0) add("Скидка" to "−" + Money.format(discountKopecks, currency))
+            if (serviceKopecks > 0) add("Обслуживание" to Money.format(serviceKopecks, currency))
+            if (tipKopecks > 0) add("Чаевые" to Money.format(tipKopecks, currency))
+            add("Итого" to Money.format(totalKopecks, currency))
+        }
 
     /**
      * Текст для копирования и шаринга по §FR-6: сумма, слагаемые и реквизиты,
@@ -52,15 +53,16 @@ data class ReceiptSummary(
     }
 
     companion object {
-        fun from(state: SelectionState): ReceiptSummary = ReceiptSummary(
-            itemsShareKopecks = state.itemsShareExactKopecks,
-            discountKopecks = state.discountShareKopecks,
-            serviceKopecks = state.serviceShareKopecks,
-            tipKopecks = state.tipKopecks,
-            totalKopecks = state.totalKopecks,
-            currency = state.currency,
-            ownItems = state.items.count { it.choice == Choice.Whole },
-            sharedItems = state.items.count { it.choice is Choice.Shared },
-        )
+        fun from(state: SelectionState): ReceiptSummary =
+            ReceiptSummary(
+                itemsShareKopecks = state.itemsShareExactKopecks,
+                discountKopecks = state.discountShareKopecks,
+                serviceKopecks = state.serviceShareKopecks,
+                tipKopecks = state.tipKopecks,
+                totalKopecks = state.totalKopecks,
+                currency = state.currency,
+                ownItems = state.items.count { it.choice == Choice.Whole },
+                sharedItems = state.items.count { it.choice is Choice.Shared },
+            )
     }
 }

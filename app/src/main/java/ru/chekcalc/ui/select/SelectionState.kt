@@ -19,7 +19,9 @@ sealed interface Choice {
 
     /** Общая на [denominator] человек: доля 1/denominator. */
     @Serializable
-    data class Shared(val denominator: Int) : Choice
+    data class Shared(
+        val denominator: Int,
+    ) : Choice
 }
 
 @Serializable
@@ -48,26 +50,32 @@ data class SelectionState(
     val denominatorChoices: List<Int> get() = listOf(2, 3, 4, 5, 6)
 
     /** Галочка: снять можно и целую позицию, и общую с долей. */
-    fun toggleWhole(id: Long): SelectionState = copy(
-        items = items.map { item ->
-            when {
-                item.id != id -> item
-                item.choice is Choice.None -> item.copy(choice = Choice.Whole)
-                else -> item.copy(choice = Choice.None)
-            }
-        },
-    )
+    fun toggleWhole(id: Long): SelectionState =
+        copy(
+            items =
+                items.map { item ->
+                    when {
+                        item.id != id -> item
+                        item.choice is Choice.None -> item.copy(choice = Choice.Whole)
+                        else -> item.copy(choice = Choice.None)
+                    }
+                },
+        )
 
-    fun setShared(id: Long, denominator: Int): SelectionState {
+    fun setShared(
+        id: Long,
+        denominator: Int,
+    ): SelectionState {
         require(denominator in 2..6) { "доля 1/2…1/6" }
         return copy(
-            items = items.map { item ->
-                when {
-                    item.id != id -> item
-                    item.choice == Choice.Shared(denominator) -> item.copy(choice = Choice.None)
-                    else -> item.copy(choice = Choice.Shared(denominator))
-                }
-            },
+            items =
+                items.map { item ->
+                    when {
+                        item.id != id -> item
+                        item.choice == Choice.Shared(denominator) -> item.copy(choice = Choice.None)
+                        else -> item.copy(choice = Choice.Shared(denominator))
+                    }
+                },
         )
     }
 
@@ -76,20 +84,23 @@ data class SelectionState(
         return copy(tipPercent = percent, tipFixedKopecks = 0)
     }
 
-    fun setTipFixed(kopecks: Long): SelectionState =
-        copy(tipFixedKopecks = kopecks.coerceAtLeast(0), tipPercent = null)
+    fun setTipFixed(kopecks: Long): SelectionState = copy(tipFixedKopecks = kopecks.coerceAtLeast(0), tipPercent = null)
 
     /** Вклад позиций без чаевых и без скидки/обслуживания. */
     val itemsShareKopecks: Long
-        get() = ShareCalculator.calculate(
-            CalcInput(lines = lines()),
-        ).totalKopecks
+        get() =
+            ShareCalculator
+                .calculate(
+                    CalcInput(lines = lines()),
+                ).totalKopecks
 
     /** Сумма долей позиций точно, в копейках: 390,25 ₽ остаются 390,25 ₽. */
     val itemsShareExactKopecks: Long
-        get() = ShareCalculator.totalExact(CalcInput(lines = lines()))
-            .setScale(0, RoundingMode.HALF_UP)
-            .toLong()
+        get() =
+            ShareCalculator
+                .totalExact(CalcInput(lines = lines()))
+                .setScale(0, RoundingMode.HALF_UP)
+                .toLong()
 
     /**
      * Восстановленное состояние (смерть процесса, старая версия) могло
@@ -118,23 +129,26 @@ data class SelectionState(
 
     /** Своя часть в копейках точно, без округления — база для процента. */
     val billShareExactKopecks: BigDecimal
-        get() = ShareCalculator.totalExact(
-            CalcInput(
-                lines = lines(),
-                discountKopecks = safeDiscountKopecks,
-                serviceKopecks = safeServiceKopecks,
-            ),
-        )
+        get() =
+            ShareCalculator.totalExact(
+                CalcInput(
+                    lines = lines(),
+                    discountKopecks = safeDiscountKopecks,
+                    serviceKopecks = safeServiceKopecks,
+                ),
+            )
 
     /** Своя часть чека до чаевых: скидка и обслуживание распределены. */
     val billShareKopecks: Long
-        get() = ShareCalculator.calculate(
-            CalcInput(
-                lines = lines(),
-                discountKopecks = safeDiscountKopecks,
-                serviceKopecks = safeServiceKopecks,
-            ),
-        ).totalKopecks
+        get() =
+            ShareCalculator
+                .calculate(
+                    CalcInput(
+                        lines = lines(),
+                        discountKopecks = safeDiscountKopecks,
+                        serviceKopecks = safeServiceKopecks,
+                    ),
+                ).totalKopecks
 
     /** Чаевые точно, без округления: округляем только итог (§6.4). */
     val tipExact: BigDecimal
@@ -159,7 +173,8 @@ data class SelectionState(
             val percent = tipPercent
             if (percent != null) {
                 // Одна дробь на всё: иначе приближения теряют рубль на ровной границе.
-                return ShareCalculator.totalWithPercentTip(baseInput(), percent)
+                return ShareCalculator
+                    .totalWithPercentTip(baseInput(), percent)
                     .setScale(-2, RoundingMode.HALF_UP)
                     .toLong()
             }
@@ -168,26 +183,29 @@ data class SelectionState(
                 .toLong()
         }
 
-    private fun baseInput() = CalcInput(
-        lines = lines(),
-        discountKopecks = safeDiscountKopecks,
-        serviceKopecks = safeServiceKopecks,
-    )
+    private fun baseInput() =
+        CalcInput(
+            lines = lines(),
+            discountKopecks = safeDiscountKopecks,
+            serviceKopecks = safeServiceKopecks,
+        )
 
-    private fun lines(): List<CalcLine> = items.map { item ->
-        when (val choice = item.choice) {
-            is Choice.None -> CalcLine(item.amountKopecks, 0, 1)
-            is Choice.Whole -> CalcLine(item.amountKopecks, 1, 1)
-            is Choice.Shared -> CalcLine(item.amountKopecks, 1, choice.denominator)
+    private fun lines(): List<CalcLine> =
+        items.map { item ->
+            when (val choice = item.choice) {
+                is Choice.None -> CalcLine(item.amountKopecks, 0, 1)
+                is Choice.Whole -> CalcLine(item.amountKopecks, 1, 1)
+                is Choice.Shared -> CalcLine(item.amountKopecks, 1, choice.denominator)
+            }
         }
-    }
 
     companion object {
-        fun fromDraft(draft: ReceiptDraft): SelectionState = SelectionState(
-            items = draft.items.map { SelectableItem(it.id, it.name, it.amountKopecks) },
-            discountKopecks = draft.discountKopecks,
-            serviceKopecks = draft.serviceKopecks,
-            currency = draft.currency,
-        )
+        fun fromDraft(draft: ReceiptDraft): SelectionState =
+            SelectionState(
+                items = draft.items.map { SelectableItem(it.id, it.name, it.amountKopecks) },
+                discountKopecks = draft.discountKopecks,
+                serviceKopecks = draft.serviceKopecks,
+                currency = draft.currency,
+            )
     }
 }
