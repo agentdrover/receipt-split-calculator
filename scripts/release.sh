@@ -2,8 +2,8 @@
 # Релизный конвейер приложения «Расчёт по чеку».
 #
 # Подкоманды:
-#   check   — проверки без ключа: чистое дерево, версия из файла, ktlint, тесты, lint
-#   verify  — SHA входит в main, CI на нём зелёный, состояние тега, правил и релиза
+#   check   — проверки без ключа: чистое дерево, версия, ktlint, тесты, lint
+#   verify  — SHA входит в main, зелёный CI на нём, состояние тега, правил, релиза
 #   build   — подписанный release APK, сверка сертификата и файл доказательств
 #   draft   — тег на проверенный SHA и ЧЕРНОВИК GitHub Release со сверкой файла
 #
@@ -27,7 +27,6 @@ readonly KEY_ALIAS="chekcalc"
 info() { printf '  %s\n' "$*"; }
 die() { printf 'ОШИБКА: %s\n' "$*" >&2; exit 1; }
 
-# java не в PATH на машине владельца: keytool, apksigner и keytool читают JAVA_HOME.
 setup_java() {
     if command -v java >/dev/null 2>&1; then
         return 0
@@ -87,12 +86,36 @@ require_clean_tree() {
     fi
 }
 
-previous_version_code() {
-    local previous_tag
-    previous_tag="$(git -C "$REPO_ROOT" describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
-    [ -n "$previous_tag" ] || return 0
-    git -C "$REPO_ROOT" show "$previous_tag:app/version.properties" 2>/dev/null |
-        sed -n 's/^versionCode=//p' | tr -d '[:space:]'
+# Максимальный versionCode среди выпущенных тегов v*. Теги обновляются с origin:
+# локальная копия может отставать, и тогда рост версии проверялся бы не по той базе.
+max_released_version_code() {
+    git -C "$REPO_ROOT" fetch origin --tags --quiet 2>/dev/null ||
+        die "не удалось обновить теги с origin"
+    local tag code max=0
+    while IFS= read -r tag; do
+        [ -n "$tag" ] || continue
+        code="$(git -C "$REPO_ROOT" show "$tag:app/version.properties" 2>/dev/null |
+            sed -n 's/^versionCode=//p' | tr -d '[:space:]')"
+        case "$code" in
+            '' | *[!0-9]*) continue ;;
+        esac
+        [ "$code" -gt "$max" ] && max="$code"
+    done <<EOF
+$(git -C "$REPO_ROOT" tag -l 'v*')
+EOF
+    printf '%s' "$max"
+}
+
+assert_version_growth() {
+    local max
+    max="$(max_released_version_code)"
+    if [ "$max" -gt 0 ]; then
+        [ "$VERSION_CODE" -gt "$max" ] ||
+            die "versionCode $VERSION_CODE не вырос относительно выпущенного максимума ($max)"
+        info "версия выросла: $max → $VERSION_CODE"
+    else
+        info "выпущенных тегов нет: первый выпуск"
+    fi
 }
 
 command_check() {
@@ -101,16 +124,7 @@ command_check() {
     load_version
     info "версия из файла: $VERSION_NAME (versionCode $VERSION_CODE), тег $TAG"
     require_clean_tree
-
-    local previous
-    previous="$(previous_version_code)"
-    if [ -n "$previous" ]; then
-        [ "$VERSION_CODE" -gt "$previous" ] ||
-            die "versionCode $VERSION_CODE не вырос относительно прошлого релиза ($previous)"
-        info "версия выросла: $previous → $VERSION_CODE"
-    else
-        info "прошлых тегов нет: первый выпуск"
-    fi
+    assert_version_growth
 
     local tracked_apk
     tracked_apk="$(git -C "$REPO_ROOT" ls-files '*.apk' | head -3)"
@@ -121,42 +135,77 @@ command_check() {
     info "release-check пройден"
 }
 
-github_repo() {
-    printf '%s' "$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+github_repo() { printf '%s' "$(gh repo view --json nameWithOwner --jq .nameWithOwner)"; }
+
+# Запрос к API с явным контролем: только подтверждённый 404 считается
+# отсутствием объекта, любой другой ответ — отказ, а не «нет данных».
+api_call() {
+    local path="$1" raw status
+    raw="$(gh api -i "$path" 2>&1)" || true
+    status="$(printf '%s' "$raw" | head -1 | grep -oE '[0-9]{3}' | head -1)"
+    [ -n "$status" ] || die "GitHub API не ответил на $path"
+    case "$status" in
+        200 | 201 | 204)
+            API_STATUS="$status"
+            API_BODY="$(printf '%s' "$raw" | awk 'body { print } /^\r?$/ { body = 1 }')"
+            ;;
+        404)
+            API_STATUS=404
+            API_BODY=""
+            ;;
+        *)
+            die "GitHub API ответил $status на $path"
+            ;;
+    esac
 }
 
-resolve_tag_sha() {
-    local tag="$1" ref_json object_type object_sha
-    ref_json="$(gh api "repos/$(github_repo)/git/ref/tags/$tag" 2>/dev/null)" || return 1
-    object_type="$(printf '%s' "$ref_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["type"])')"
-    object_sha="$(printf '%s' "$ref_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
-    if [ "$object_type" = "tag" ]; then
-        object_sha="$(gh api "repos/$(github_repo)/git/tags/$object_sha" |
-            python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
-    fi
-    printf '%s' "$object_sha"
+json_field() { python3 -c 'import json,sys; print(json.loads(sys.argv[1])[sys.argv[2]])' "$1" "$2"; }
+
+# Тег на origin, разыменованный до коммита. Пустой ответ — тега нет.
+remote_tag_sha() {
+    local out
+    out="$(git -C "$REPO_ROOT" ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}" 2>/dev/null)" || return 2
+    printf '%s' "$out" | awk '/\^\{\}$/ { print $1; found = 1 } END { if (!found) exit 0 }' | head -1
 }
 
+# Правила репозитория для тегов: возвращает 0, если создание тега запрещено.
 tag_rules_block_creation() {
-    local login rulesets_json ruleset_id
-    login="$(gh api user --jq .login)"
-    rulesets_json="$(gh api "repos/$(github_repo)/rulesets")"
-    for ruleset_id in $(printf '%s' "$rulesets_json" |
+    local rulesets_login rulesets_uid ruleset_id
+    api_call "repos/$(github_repo)/rulesets"
+    rulesets_login="$(gh api user --jq .login)"
+    rulesets_uid="$(gh api user --jq .id)"
+    local ref="refs/tags/$TAG"
+    for ruleset_id in $(printf '%s' "$API_BODY" |
         python3 -c 'import json,sys
 for item in json.load(sys.stdin):
     if item.get("target") == "tag":
         print(item["id"])'); do
-        if ! gh api "repos/$(github_repo)/rulesets/$ruleset_id" | python3 -c "
-import json, sys
+        api_call "repos/$(github_repo)/rulesets/$ruleset_id"
+        if printf '%s' "$API_BODY" | python3 -c '
+import fnmatch, json, sys
+ref = sys.argv[1]
+uid = int(sys.argv[2])
 data = json.load(sys.stdin)
-if data.get('enforcement') != 'active':
+if data.get("enforcement") != "active":
     raise SystemExit(0)
-bypass = {item.get('actor_id') for item in data.get('bypass_actors', [])}
-for rule in data.get('rules', []):
-    if rule.get('type') == 'creation' and $login not in bypass:
-        raise SystemExit(1)
-raise SystemExit(0)
-"; then
+conditions = (data.get("conditions") or {}).get("ref_name") or {}
+include = conditions.get("include") or []
+exclude = conditions.get("exclude") or []
+if include and not any(fnmatch.fnmatch(ref, pattern) for pattern in include):
+    raise SystemExit(0)
+if any(fnmatch.fnmatch(ref, pattern) for pattern in exclude):
+    raise SystemExit(0)
+restricted = [rule for rule in data.get("rules", []) if rule.get("type") in ("creation", "update", "deletion")]
+if not restricted:
+    raise SystemExit(0)
+bypass = data.get("bypass_actors") or []
+if any(item.get("actor_type") == "User" and item.get("actor_id") == uid for item in bypass):
+    raise SystemExit(0)
+unknown = [item.get("actor_type") for item in bypass if item.get("actor_type") != "User"]
+if unknown:
+    print("ПРАВИЛА: есть исключения для " + ",".join(sorted(set(unknown))) + " — проверьте права вручную")
+raise SystemExit(1)
+' "$ref" "$rulesets_uid"; then
             return 0
         fi
     done
@@ -176,44 +225,55 @@ command_verify() {
         die "SHA $sha не входит в main: релизить можно только слитое"
     info "SHA входит в main: $sha"
 
-    local runs completed success
-    runs="$(gh run list --workflow android.yml --commit "$sha" --limit 20 \
-        --json status,conclusion,databaseId)"
-    completed="$(printf '%s' "$runs" | python3 -c 'import json,sys; print(sum(1 for r in json.load(sys.stdin) if r["status"]=="completed"))')"
-    success="$(printf '%s' "$runs" | python3 -c 'import json,sys; print(sum(1 for r in json.load(sys.stdin) if r["status"]=="completed" and r["conclusion"]=="success"))')"
-    [ "$completed" -gt 0 ] || die "на SHA $sha нет завершённых прогонов android.yml"
-    [ "$success" -gt 0 ] || die "на SHA $sha нет успешных прогонов android.yml"
-    info "CI android.yml: успешных $success из $completed"
+    local runs latest_state
+    runs="$(gh run list --workflow android.yml --commit "$sha" --limit 40 \
+        --json status,conclusion,createdAt,event,headBranch,databaseId 2>/dev/null)" ||
+        die "не удалось получить прогоны android.yml для $sha"
+    latest_state="$(printf '%s' "$runs" | python3 -c '
+import json, sys
+runs = json.load(sys.stdin)
+if not runs:
+    print("none;")
+    raise SystemExit(0)
+latest = max(runs, key=lambda run: run["createdAt"])
+print("%s;%s;%s" % (latest["status"], latest["conclusion"], latest["databaseId"]))
+')"
+    case "$latest_state" in
+        none\;*) die "на SHA $sha нет прогонов android.yml" ;;
+        completed\;success\;*) info "последний прогон android.yml на SHA: успешен" ;;
+        completed\;*)
+            die "последний прогон android.yml на SHA завершился с ${latest_state#completed;}"
+            ;;
+        *)
+            die "последний прогон android.yml на SHA ещё не завершён: ${latest_state%%;*}"
+            ;;
+    esac
 
-    local tag_sha tag_state
-    if tag_sha="$(resolve_tag_sha "$TAG")"; then
-        [ "$tag_sha" = "$sha" ] || die "тег $TAG уже стоит на $tag_sha, а не на $sha. Тег не перемещается"
-        tag_state="resume"
+    local tag_sha="" rc=0
+    tag_sha="$(remote_tag_sha)" || rc=$?
+    [ "$rc" -eq 0 ] || die "не удалось прочитать тег $TAG на origin"
+    if [ -n "$tag_sha" ]; then
+        [ "$tag_sha" = "$sha" ] ||
+            die "тег $TAG на origin стоит на $tag_sha, а не на $sha. Тег не перемещается"
         info "тег $TAG уже на этом SHA: возобновление выпуска"
     else
-        tag_state="new"
         info "тега $TAG нет: новый выпуск"
     fi
 
-    local release_json release_state
-    if release_json="$(gh release view "$TAG" --json isDraft 2>/dev/null)"; then
-        if [ "$(printf '%s' "$release_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["isDraft"])')" != "True" ]; then
+    api_call "repos/$(github_repo)/releases/tags/$TAG"
+    if [ "$API_STATUS" = "200" ]; then
+        [ "$(json_field "$API_BODY" draft)" = "True" ] ||
             die "релиз $TAG уже опубликован: новый выпуск с тем же тегом невозможен"
-        fi
-        release_state="draft"
         info "черновик релиза $TAG уже существует: возобновление"
     else
-        release_state="none"
         info "релиза $TAG нет"
     fi
 
     if tag_rules_block_creation; then
-        die "правила репозитория запрещают создание тегов и ваша учётная запись не в списке исключений"
+        die "правила репозитория запрещают создание тегов для вашей учётной записи"
     fi
     info "правила репозитория не мешают созданию тега"
-
-    [ "$tag_state" != "resume" ] || [ "$release_state" = "draft" ] || true
-    printf 'VERIFY_OK tag=%s release=%s sha=%s\n' "$tag_state" "$release_state" "$sha"
+    printf 'VERIFY_OK sha=%s\n' "$sha"
 }
 
 load_signing_key() {
@@ -293,7 +353,7 @@ command_build() {
     sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
     mkdir -p "$(dirname "$EVIDENCE_FILE")"
     python3 - "$EVIDENCE_FILE" "$sha" "$VERSION_CODE" "$VERSION_NAME" "$cert_sha" "$apk_sha" "$apk" <<'PY'
-import json, sys, datetime, pathlib
+import datetime, json, pathlib, sys
 path, sha, code, name, cert, apk_sha, apk = sys.argv[1:8]
 data = {
     "sha": sha,
@@ -319,34 +379,27 @@ command_draft() {
     [ -f "$EVIDENCE_FILE" ] || die "нет $EVIDENCE_FILE: сначала release-build"
     [ -f "$REPO_ROOT/docs/releases/$TAG.md" ] || die "нет заметок docs/releases/$TAG.md"
 
-    local sha apk apk_sha evidence_sha evidence_apk_sha
-    sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha"])' "$EVIDENCE_FILE")"
-    apk="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["apkPath"])' "$EVIDENCE_FILE")"
-    apk_sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["apkSha256"])' "$EVIDENCE_FILE")"
-    evidence_sha="$sha"
-    evidence_apk_sha="$apk_sha"
-
-    local head
+    local sha apk apk_sha head
+    sha="$(json_field "$(cat "$EVIDENCE_FILE")" sha)"
+    apk="$(json_field "$(cat "$EVIDENCE_FILE")" apkPath)"
+    apk_sha="$(json_field "$(cat "$EVIDENCE_FILE")" apkSha256)"
     head="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-    [ "$evidence_sha" = "$head" ] || die "доказательства от $evidence_sha, а HEAD $head. Пересоберите APK"
+    [ "$sha" = "$head" ] || die "доказательства от $sha, а HEAD $head. Пересоберите APK"
     [ -f "$apk" ] || die "APK из доказательств не найден: $apk"
-    local actual_sha
-    actual_sha="$(shasum -a 256 "$apk" | awk '{print $1}')"
-    [ "$actual_sha" = "$evidence_apk_sha" ] || die "sha256 APK не совпал с доказательствами"
+    [ "$(shasum -a 256 "$apk" | awk '{print $1}')" = "$apk_sha" ] ||
+        die "sha256 APK не совпал с доказательствами"
 
     if [ -n "$dry_run" ]; then
-        # Предпросмотр: печатает план и ничего не делает. Проверку «HEAD в main»
-        # выполняет только настоящий запуск — до merge её пройти нельзя.
         printf 'DRY-RUN: тег %s на %s\n' "$TAG" "$head"
         printf 'DRY-RUN: gh release create %s %s %s.sha256 --draft --verify-tag --notes-file docs/releases/%s.md\n' \
             "$TAG" "$apk" "$apk" "$TAG"
-        printf 'DRY-RUN: проверка «HEAD в main», состояния тега и скачивания файла будет выполнена при реальном запуске\n'
+        printf 'DRY-RUN: проверки CI, тега и скачивания файла выполнит настоящий запуск\n'
         return 0
     fi
 
-    git -C "$REPO_ROOT" fetch origin main --quiet 2>/dev/null || true
-    git -C "$REPO_ROOT" merge-base --is-ancestor "$head" origin/main ||
-        die "HEAD $head не входит в main: черновик релиза делается только с main"
+    # Настоящий запуск повторяет проверки verify: без зелёного CI и без
+    # свободного тега черновик не создаётся.
+    command_verify "$head"
 
     if git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
         local local_sha
@@ -358,13 +411,23 @@ command_draft() {
         info "создан тег $TAG на $head"
     fi
 
-    if ! git -C "$REPO_ROOT" ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+    local remote_sha rc=0
+    remote_sha="$(remote_tag_sha)" || rc=$?
+    [ "$rc" -eq 0 ] || die "не удалось прочитать тег $TAG на origin"
+    if [ -z "$remote_sha" ]; then
         git -C "$REPO_ROOT" push origin "refs/tags/$TAG"
         info "тег отправлен в origin"
+    elif [ "$remote_sha" != "$head" ]; then
+        die "на origin тег $TAG стоит на $remote_sha, а не на $head. Тег не перемещается"
+    else
+        info "тег $TAG уже на origin и указывает на $head"
     fi
 
-    if gh release view "$TAG" >/dev/null 2>&1; then
-        info "релиз $TAG уже существует, файлы не трогаем"
+    api_call "repos/$(github_repo)/releases/tags/$TAG"
+    if [ "$API_STATUS" = "200" ]; then
+        [ "$(json_field "$API_BODY" draft)" = "True" ] ||
+            die "релиз $TAG уже опубликован: файлы не трогаем"
+        info "черновик $TAG уже существует, файлы не трогаем"
     else
         (cd "$REPO_ROOT" && gh release create "$TAG" "$apk" "$apk.sha256" \
             --draft --verify-tag --title "Расчёт по чеку $TAG" \
@@ -372,14 +435,17 @@ command_draft() {
         info "создан черновик релиза $TAG"
     fi
 
-    local tmp_dir
+    local tmp_dir downloaded
     tmp_dir="$(mktemp -d)"
-    trap 'rm -rf "$tmp_dir"' RETURN
-    (cd "$tmp_dir" && gh release download "$TAG" --pattern 'chekcalc-release.apk' --dir .)
-    local downloaded
+    if ! gh release download "$TAG" --repo "$(github_repo)" \
+        --pattern 'chekcalc-release.apk' --dir "$tmp_dir"; then
+        rm -rf "$tmp_dir"
+        die "не удалось скачать APK из черновика $TAG"
+    fi
     downloaded="$(shasum -a 256 "$tmp_dir/chekcalc-release.apk" | awk '{print $1}')"
-    [ "$downloaded" = "$evidence_apk_sha" ] ||
-        die "скачанный из релиза APK не совпал по sha256: $downloaded против $evidence_apk_sha"
+    rm -rf "$tmp_dir"
+    [ "$downloaded" = "$apk_sha" ] ||
+        die "скачанный из релиза APK не совпал по sha256: $downloaded против $apk_sha"
     info "скачанный APK совпал по sha256"
     printf 'DRAFT_OK tag=%s draft=yes\n' "$TAG"
 }
@@ -388,9 +454,9 @@ usage() {
     cat <<'TXT'
 Использование: scripts/release.sh <команда> [аргументы]
 
-  check            проверки без ключа: дерево, версия, ktlint, тесты, lint
-  verify [SHA]     SHA в main, зелёный CI, состояние тега, правил и релиза
-  build [--clean]  подписанный release APK и файл доказательств
+  check             проверки без ключа: дерево, версия, ktlint, тесты, lint
+  verify [SHA]      SHA в main, последний CI на нём зелёный, тег, правила, релиз
+  build [--clean]   подписанный release APK и файл доказательств
   draft [--dry-run] тег на проверенный SHA и черновик GitHub Release
 TXT
 }
