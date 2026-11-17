@@ -15,7 +15,22 @@ import fnmatch
 import json
 import sys
 
-BLOCKING_RULES = frozenset({"creation", "update", "deletion"})
+# Создание тега ограничивает только правило creation. update и deletion
+# относятся к изменению и удалению уже существующего ref и созданию не мешают.
+BLOCKING_RULES = frozenset({"creation"})
+
+
+def ref_matches(pattern, ref):
+    """Совпадение ref с шаблоном правил GitHub.
+
+    GitHub понимает в условиях ref_name служебные шаблоны: ~ALL — любой ref,
+    ~DEFAULT_BRANCH — ветка по умолчанию (для тега не совпадает никогда).
+    """
+    if pattern == "~ALL":
+        return True
+    if pattern == "~DEFAULT_BRANCH":
+        return False
+    return fnmatch.fnmatch(ref, pattern)
 
 
 def ruleset_applies(ruleset, ref):
@@ -23,9 +38,9 @@ def ruleset_applies(ruleset, ref):
     conditions = (ruleset.get("conditions") or {}).get("ref_name") or {}
     include = conditions.get("include") or []
     exclude = conditions.get("exclude") or []
-    if include and not any(fnmatch.fnmatch(ref, pattern) for pattern in include):
+    if include and not any(ref_matches(pattern, ref) for pattern in include):
         return False
-    return not any(fnmatch.fnmatch(ref, pattern) for pattern in exclude)
+    return not any(ref_matches(pattern, ref) for pattern in exclude)
 
 
 def ruleset_blocks(ruleset, ref, uid):

@@ -50,6 +50,31 @@ class RulesetGateTest(unittest.TestCase):
         data = [ruleset(rules=[{"type": "non_fast_forward"}])]
         self.assertIsNone(GATE.blocking_ruleset(data, REF, UID))
 
+    def test_update_rule_does_not_block_creation(self):
+        data = [ruleset(rules=[{"type": "update"}])]
+        self.assertIsNone(GATE.blocking_ruleset(data, REF, UID))
+
+    def test_deletion_rule_does_not_block_creation(self):
+        data = [ruleset(rules=[{"type": "deletion"}])]
+        self.assertIsNone(GATE.blocking_ruleset(data, REF, UID))
+
+    def test_all_pattern_blocks_any_tag(self):
+        data = [ruleset(conditions={"ref_name": {"include": ["~ALL"]}})]
+        self.assertIsNotNone(GATE.blocking_ruleset(data, REF, UID))
+
+    def test_all_pattern_with_user_bypass_allows(self):
+        data = [
+            ruleset(
+                conditions={"ref_name": {"include": ["~ALL"]}},
+                bypass_actors=[{"actor_type": "User", "actor_id": UID}],
+            )
+        ]
+        self.assertIsNone(GATE.blocking_ruleset(data, REF, UID))
+
+    def test_default_branch_pattern_does_not_match_tags(self):
+        data = [ruleset(conditions={"ref_name": {"include": ["~DEFAULT_BRANCH"]}})]
+        self.assertIsNone(GATE.blocking_ruleset(data, REF, UID))
+
     def test_user_bypass_allows_tag(self):
         data = [ruleset(bypass_actors=[{"actor_type": "User", "actor_id": UID, "bypass_mode": "always"}])]
         self.assertIsNone(GATE.blocking_ruleset(data, REF, UID))
