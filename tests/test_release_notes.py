@@ -117,6 +117,12 @@ class ValidationTest(unittest.TestCase):
     def test_valid_pull_passes(self):
         NOTES.validate_pulls([pull(1, "x")], "abc")
 
+    def test_missing_merged_at_raises(self):
+        broken = pull(1, "x")
+        broken.pop("merged_at")
+        with self.assertRaises(NOTES.ApiError):
+            NOTES.validate_pulls([broken], "abc")
+
 
 class RenderTest(unittest.TestCase):
     def test_sections_in_order(self):
@@ -262,6 +268,14 @@ class ApiTest(unittest.TestCase):
         self.set_gh("HTTP/2.0 500 Oops\n\n{}", rc=1)
         second = NOTES.pulls_for_commit("o/r", "abc", cache)
         self.assertEqual(second, first)
+
+    def test_cached_incomplete_pull_raises(self):
+        cache = os.path.join(self.tmp.name, "cache-bad")
+        os.makedirs(cache)
+        with open(os.path.join(cache, "abc.json"), "w", encoding="utf-8") as handle:
+            handle.write('[{"number": 1}]')
+        with self.assertRaises(NOTES.ApiError):
+            NOTES.pulls_for_commit("o/r", "abc", cache)
 
     def test_dry_run_cache_is_read_only(self):
         cache = os.path.join(self.tmp.name, "cache-dry")

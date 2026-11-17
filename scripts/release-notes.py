@@ -93,6 +93,8 @@ def validate_pulls(pulls, sha):
         base = item.get("base")
         if not isinstance(base, dict) or not isinstance(base.get("ref"), str):
             raise ApiError("у PR #%s из %s нет базовой ветки" % (item.get("number"), sha))
+        if "merged_at" not in item:
+            raise ApiError("у PR #%s из %s нет поля merged_at" % (item.get("number"), sha))
         merged_at = item.get("merged_at")
         if merged_at is not None:
             if not isinstance(merged_at, str):
@@ -225,7 +227,9 @@ def pulls_for_commit(repo, sha, cache_dir, write_cache=True):
         path = os.path.join(cache_dir, "%s.json" % sha)
         if os.path.exists(path):
             with open(path, encoding="utf-8") as handle:
-                return json.load(handle)
+                cached = json.load(handle)
+            validate_pulls(cached, sha)
+            return cached
     body = run_gh(["repos/%s/commits/%s/pulls" % (repo, sha)])
     try:
         pulls = json.loads(body)
