@@ -163,9 +163,14 @@ json_field() { python3 -c 'import json,sys; print(json.loads(sys.argv[1])[sys.ar
 
 # Тег на origin, разыменованный до коммита. Пустой ответ — тега нет.
 remote_tag_sha() {
-    local out
+    local out peeled
     out="$(git -C "$REPO_ROOT" ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}" 2>/dev/null)" || return 2
-    printf '%s' "$out" | awk '/\^\{\}$/ { print $1; found = 1 } END { if (!found) exit 0 }' | head -1
+    peeled="$(printf '%s' "$out" | awk '/\^\{\}$/ { print $1; exit }')"
+    if [ -n "$peeled" ]; then
+        printf '%s' "$peeled"
+        return 0
+    fi
+    printf '%s' "$out" | awk -v ref="refs/tags/$TAG" '$2 == ref { print $1; exit }'
 }
 
 # Правила репозитория для тегов: возвращает 0, если создание тега запрещено.
