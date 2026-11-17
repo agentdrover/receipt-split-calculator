@@ -55,6 +55,10 @@ jobs:
         id: ktlint
         run: ./gradlew --no-daemon ktlintCheck
 
+      - name: Тесты релизных скриптов
+        working-directory: ${{ github.workspace }}
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
       # if: always() на остальных шагах: падение стиля не должно оставлять
       # отчёт хаба без результатов проверок.
       - name: Тесты

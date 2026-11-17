@@ -130,6 +130,9 @@ command_check() {
     tracked_apk="$(git -C "$REPO_ROOT" ls-files '*.apk' | head -3)"
     [ -z "$tracked_apk" ] || die "APK попал в git: $tracked_apk. Уберите его из индекса"
 
+    info "тесты релизных скриптов"
+    (cd "$REPO_ROOT" && python3 -m unittest discover -s tests -p 'test_*.py' -q)
+
     info "ktlint, тесты, lint"
     (cd "$APP_DIR" && ./gradlew --quiet ktlintCheck test lint)
     info "release-check пройден"
@@ -173,48 +176,23 @@ remote_tag_sha() {
     printf '%s' "$out" | awk -v ref="refs/tags/$TAG" '$2 == ref { print $1; exit }'
 }
 
-# Правила репозитория для тегов: возвращает 0, если создание тега запрещено.
-tag_rules_block_creation() {
-    local rulesets_login rulesets_uid ruleset_id
-    api_call "repos/$(github_repo)/rulesets"
-    rulesets_login="$(gh api user --jq .login)"
-    rulesets_uid="$(gh api user --jq .id)"
-    local ref="refs/tags/$TAG"
-    for ruleset_id in $(printf '%s' "$API_BODY" |
-        python3 -c 'import json,sys
+# Оценка правил тегов через scripts/tag_rules_gate.py.
+# Коды: 0 — можно, 3 — запрещено, другое — не удалось оценить.
+tag_rules_gate() {
+    local uid ruleset_ids ruleset_id collected=""
+    uid="$(gh api user --jq .id 2>/dev/null)" || return 2
+    api_call "repos/$(github_repo)/rulesets" || return 2
+    ruleset_ids="$(printf '%s' "$API_BODY" | python3 -c '
+import json, sys
 for item in json.load(sys.stdin):
     if item.get("target") == "tag":
-        print(item["id"])'); do
-        api_call "repos/$(github_repo)/rulesets/$ruleset_id"
-        if printf '%s' "$API_BODY" | python3 -c '
-import fnmatch, json, sys
-ref = sys.argv[1]
-uid = int(sys.argv[2])
-data = json.load(sys.stdin)
-if data.get("enforcement") != "active":
-    raise SystemExit(0)
-conditions = (data.get("conditions") or {}).get("ref_name") or {}
-include = conditions.get("include") or []
-exclude = conditions.get("exclude") or []
-if include and not any(fnmatch.fnmatch(ref, pattern) for pattern in include):
-    raise SystemExit(0)
-if any(fnmatch.fnmatch(ref, pattern) for pattern in exclude):
-    raise SystemExit(0)
-restricted = [rule for rule in data.get("rules", []) if rule.get("type") in ("creation", "update", "deletion")]
-if not restricted:
-    raise SystemExit(0)
-bypass = data.get("bypass_actors") or []
-if any(item.get("actor_type") == "User" and item.get("actor_id") == uid for item in bypass):
-    raise SystemExit(0)
-unknown = [item.get("actor_type") for item in bypass if item.get("actor_type") != "User"]
-if unknown:
-    print("ПРАВИЛА: есть исключения для " + ",".join(sorted(set(unknown))) + " — проверьте права вручную")
-raise SystemExit(1)
-' "$ref" "$rulesets_uid"; then
-            return 0
-        fi
+        print(item["id"])
+')" || return 2
+    for ruleset_id in $ruleset_ids; do
+        api_call "repos/$(github_repo)/rulesets/$ruleset_id" || return 2
+        collected+="$API_BODY"$'\n'
     done
-    return 1
+    printf '%s' "$collected" | python3 "$SCRIPT_DIR/tag_rules_gate.py" --ref "refs/tags/$TAG" --uid "$uid"
 }
 
 command_verify() {
@@ -274,10 +252,13 @@ print("%s;%s;%s" % (latest["status"], latest["conclusion"], latest["databaseId"]
         info "релиза $TAG нет"
     fi
 
-    if tag_rules_block_creation; then
-        die "правила репозитория запрещают создание тегов для вашей учётной записи"
-    fi
-    info "правила репозитория не мешают созданию тега"
+    local gate_rc=0
+    tag_rules_gate || gate_rc=$?
+    case "$gate_rc" in
+        0) info "правила репозитория не мешают созданию тега" ;;
+        3) die "правила репозитория запрещают создание тега для вашей учётной записи" ;;
+        *) die "не удалось оценить правила репозитория (код $gate_rc)" ;;
+    esac
     printf 'VERIFY_OK sha=%s\n' "$sha"
 }
 
