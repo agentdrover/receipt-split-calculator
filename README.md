@@ -71,6 +71,7 @@ make -C app release-check    # дерево, версия, ktlint, тесты, l
 make -C app release-verify   # SHA в main, зелёный CI, состояние тега
 make -C app release-build    # подписанный APK и файл доказательств
 make -C app release-draft    # тег и черновик GitHub Release
+python3 scripts/release-notes.py --tag v1.1.0 --from v1.0.0 --dry-run   # заметки из PR
 ```
 
 ## Первый запуск
