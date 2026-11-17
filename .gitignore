@@ -24,3 +24,7 @@ local.properties
 keystore.properties
 signing.properties
 release-key*
+
+# релизные артефакты: в git не попадают
+*.apk
+*.aab

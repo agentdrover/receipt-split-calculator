@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application") version "8.5.2"
     id("org.jetbrains.kotlin.android") version "2.0.21"
@@ -12,6 +14,19 @@ plugins {
 ktlint {
     version.set("1.3.1")
 }
+
+// Версия приложения — в одном файле app/version.properties. Его же читает
+// scripts/release.sh, чтобы проверки и сборка не расходились.
+val versionProperties =
+    Properties().also { properties ->
+        val versionFile = file("version.properties")
+        require(versionFile.isFile) {
+            "Нет app/version.properties: это единственный источник versionCode и versionName"
+        }
+        versionFile.inputStream().use(properties::load)
+    }
+val appVersionCode = versionProperties.getProperty("versionCode").trim().toInt()
+val appVersionName = versionProperties.getProperty("versionName").trim()
 
 // Подпись release задаётся только переменными окружения: ключ не лежит в
 // репозитории и не попадает в сборку из файла настроек.
@@ -50,8 +65,8 @@ android {
         applicationId = "ru.chekcalc"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     buildFeatures {

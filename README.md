@@ -58,6 +58,21 @@ R8 требует проверки на устройстве, поэтому rel
 adb install -r app/build/outputs/apk/debug/chekcalc-debug.apk
 ```
 
+## Релиз
+
+Версия приложения — в `app/version.properties`; release-сборка проверяет
+сертификат, пишет файл доказательств, ставит тег и создаёт черновик
+GitHub Release. Порядок, бэкап ключа и действия при сбое —
+в [docs/releasing.md](docs/releasing.md); история версий — в
+[CHANGELOG.md](CHANGELOG.md).
+
+```sh
+make -C app release-check    # дерево, версия, ktlint, тесты, lint
+make -C app release-verify   # SHA в main, зелёный CI, состояние тега
+make -C app release-build    # подписанный APK и файл доказательств
+make -C app release-draft    # тег и черновик GitHub Release
+```
+
 ## Первый запуск
 
 1. Открыть «Настройки» и выбрать провайдера: DeepSeek, OpenRouter или свой
