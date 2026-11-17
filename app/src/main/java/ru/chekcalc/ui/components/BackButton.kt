@@ -15,7 +15,10 @@ import androidx.compose.ui.unit.dp
  * Зона нажатия не меньше 48 dp: мелкая ссылка в углу — частая причина промаха.
  */
 @Composable
-fun BackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun BackButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     TextButton(
         onClick = onClick,
         modifier = modifier.heightIn(min = 48.dp),

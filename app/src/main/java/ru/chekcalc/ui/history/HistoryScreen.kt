@@ -1,5 +1,6 @@
 package ru.chekcalc.ui.history
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +37,6 @@ import ru.chekcalc.ui.review.formatKopecks
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.activity.compose.BackHandler
 
 /**
  * История чеков: список сохранённых расчётов, удаление и «удалить всё».
@@ -66,27 +66,30 @@ fun HistoryScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // SAVE показывается на главном экране, READ — отдельным блоком ниже.
-            val historyProblems = failures.filter {
-                it != HistoryFailure.SAVE && it != HistoryFailure.READ
-            }
+            val historyProblems =
+                failures.filter {
+                    it != HistoryFailure.SAVE && it != HistoryFailure.READ
+                }
             if (historyProblems.isNotEmpty()) {
                 item(key = "failure") {
                     Text(
-                        text = historyProblems.joinToString(" ") { kind ->
-                            when (kind) {
-                                HistoryFailure.DELETE -> "Не удалось удалить чек. Попробуйте ещё раз."
-                                HistoryFailure.CLEAR -> "Не удалось очистить историю. Попробуйте ещё раз."
-                                HistoryFailure.READ -> ""
-                                HistoryFailure.SAVE -> ""
-                            }
-                        },
+                        text =
+                            historyProblems.joinToString(" ") { kind ->
+                                when (kind) {
+                                    HistoryFailure.DELETE -> "Не удалось удалить чек. Попробуйте ещё раз."
+                                    HistoryFailure.CLEAR -> "Не удалось очистить историю. Попробуйте ещё раз."
+                                    HistoryFailure.READ -> ""
+                                    HistoryFailure.SAVE -> ""
+                                }
+                            },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.errorContainer)
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
                     )
                 }
             }
@@ -104,11 +107,12 @@ fun HistoryScreen(
                         style = MaterialTheme.typography.headlineLarge.copy(fontFamily = FontFamily.Serif),
                     )
                     Text(
-                        text = when {
-                            readFailure -> "не прочитана"
-                            entries.isEmpty() -> "пока пусто"
-                            else -> "${entries.size} ${checksWord(entries.size)}"
-                        },
+                        text =
+                            when {
+                                readFailure -> "не прочитана"
+                                entries.isEmpty() -> "пока пусто"
+                                else -> "${entries.size} ${checksWord(entries.size)}"
+                            },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
@@ -119,15 +123,17 @@ fun HistoryScreen(
             if (readFailure) {
                 item(key = "read-failure") {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.errorContainer)
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
                     ) {
                         Text(
-                            text = "История не прочитана: файл повреждён или не совпадает " +
-                                "с версией приложения. Прежние чеки не показаны.",
+                            text =
+                                "История не прочитана: файл повреждён или не совпадает " +
+                                    "с версией приложения. Прежние чеки не показаны.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                         )
@@ -143,15 +149,17 @@ fun HistoryScreen(
             if (copyNotice) {
                 item(key = "copy") {
                     Text(
-                        text = "Прежняя история не читалась. Её байты сохранены " +
-                            "копией на устройстве.",
+                        text =
+                            "Прежняя история не читалась. Её байты сохранены " +
+                                "копией на устройстве.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
                     )
                 }
             }
@@ -162,11 +170,12 @@ fun HistoryScreen(
                         text = "Здесь появятся проверенные чеки: дата, место и ваша сумма. Фото не сохраняется.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(16.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .padding(16.dp),
                     )
                 }
                 // Очередь могла не записаться при пустой истории: без этого
@@ -181,10 +190,11 @@ fun HistoryScreen(
             } else if (!readFailure) {
                 item(key = "list") {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(MaterialTheme.colorScheme.surface),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(MaterialTheme.colorScheme.surface),
                     ) {
                         entries.forEachIndexed { index, entry ->
                             if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -234,12 +244,17 @@ fun HistoryScreen(
 }
 
 @Composable
-private fun HistoryRow(entry: HistoryEntry, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun HistoryRow(
+    entry: HistoryEntry,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen)
-            .padding(start = 16.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpen)
+                .padding(start = 16.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -274,14 +289,18 @@ private fun HistoryRow(entry: HistoryEntry, onOpen: () -> Unit, onDelete: () -> 
 }
 
 /** Дата записи: «14 ноября, 21:40». */
-internal fun formatDate(millis: Long): String =
-    SimpleDateFormat("d MMMM, HH:mm", Locale("ru")).format(Date(millis))
+internal fun formatDate(millis: Long): String = SimpleDateFormat("d MMMM, HH:mm", Locale("ru")).format(Date(millis))
 
 internal fun checksWord(count: Int): String = plural(count, "чек", "чека", "чеков")
 
 internal fun positionsWord(count: Int): String = plural(count, "позиция", "позиции", "позиций")
 
-private fun plural(count: Int, one: String, few: String, many: String): String {
+private fun plural(
+    count: Int,
+    one: String,
+    few: String,
+    many: String,
+): String {
     val mod100 = count % 100
     val mod10 = count % 10
     return when {

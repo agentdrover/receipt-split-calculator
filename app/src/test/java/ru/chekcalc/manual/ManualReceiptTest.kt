@@ -12,19 +12,20 @@ import ru.chekcalc.ui.review.DraftItem
 import ru.chekcalc.ui.review.ReceiptDraft
 
 class ManualReceiptTest {
-
     private val json = Json { ignoreUnknownKeys = false }
 
-    private fun draft(): ReceiptDraft = ReceiptDraft(
-        items = listOf(
-            DraftItem(1, "Кофе", 1.0, 25_000),
-            DraftItem(2, "Десерт", 2.0, 19_990),
-            DraftItem(3, "Сок", 1.0, 15_000),
-        ),
-        discountKopecks = 10_000,
-        serviceKopecks = 5_000,
-        totalKopecks = 74_980,
-    )
+    private fun draft(): ReceiptDraft =
+        ReceiptDraft(
+            items =
+                listOf(
+                    DraftItem(1, "Кофе", 1.0, 25_000),
+                    DraftItem(2, "Десерт", 2.0, 19_990),
+                    DraftItem(3, "Сок", 1.0, 15_000),
+                ),
+            discountKopecks = 10_000,
+            serviceKopecks = 5_000,
+            totalKopecks = 74_980,
+        )
 
     @Test
     fun `ручной чек превращается в receipt v1 с суммами в рублях`() {
@@ -79,12 +80,13 @@ class ManualReceiptTest {
 
     @Test
     fun `дробное количество считается по цене за единицу`() {
-        val receipt = ManualReceipt.toReceipt(
-            ReceiptDraft(
-                items = listOf(DraftItem(1, "Сыр", 0.384, 104_100)),
-                totalKopecks = 39_974,
-            ),
-        )
+        val receipt =
+            ManualReceipt.toReceipt(
+                ReceiptDraft(
+                    items = listOf(DraftItem(1, "Сыр", 0.384, 104_100)),
+                    totalKopecks = 39_974,
+                ),
+            )
 
         assertEquals(399.74, receipt.items.single().amount, 1e-9)
     }

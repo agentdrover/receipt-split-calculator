@@ -6,41 +6,37 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.chekcalc.model.Receipt
+import java.io.File
 
 /**
  * Golden set: эталонные чеки и их разметка по контракту receipt.v1.
  *
- * Тест держит две вещи: разметка не разошлась с моделями, и в наборе есть
- * кейс нечитаемого чека. Точность распознавания здесь не измеряется —
- * для этого нужен живой провайдер.
+ * Набор читается из каталога ресурсов, а не из списка слагов: новый эталон,
+ * положенный рядом с остальными, проверяется сам. Тест держит две вещи:
+ * разметка не разошлась с моделями и у каждого набора есть фото. Точность
+ * распознавания здесь не измеряется — для этого нужен живой провайдер.
  */
 class GoldenSetTest {
-
     private val json = Json { ignoreUnknownKeys = false }
 
-    private val slugs = listOf(
-        "aheqvr-check",
-        "bakery-cafe",
-        "california-restaurant",
-        "cord-cafe-004",
-        "cord-cafe-007",
-        "cord-cafe-009",
-        "cord-cafe-013",
-        "cord-cafe-014",
-        "cord-cafe-015",
-        "cord-cafe-020",
-        "dns-store-fiscal",
-        "fine-bill-meal",
-        "hk-star-seafood",
-        "mcdonalds-keelung",
-        "mcdonalds-kunming",
-        "metropole-cafe",
-        "nepal-restaurant",
-        "ohsho-kyoto",
-        "railway-fiscal",
-        "taebaek-restaurant",
-        "thai-restaurant",
-    )
+    private val fixtureRoot: File by lazy {
+        val url = javaClass.getResource("/golden") ?: error("в classpath нет каталога golden")
+        require(url.protocol == "file") {
+            "golden должен быть распакован в каталог, а не упакован в архив: ${url.protocol}"
+        }
+        File(url.toURI())
+    }
+
+    private val slugs: List<String> by lazy {
+        val directories =
+            fixtureRoot
+                .listFiles { file -> file.isDirectory }
+                ?.map { it.name }
+                ?.sorted()
+                .orEmpty()
+        require(directories.isNotEmpty()) { "в ${fixtureRoot.path} нет ни одного эталона" }
+        directories
+    }
 
     private fun load(slug: String): Receipt {
         val stream = javaClass.getResourceAsStream("/golden/$slug/expected.json")
@@ -49,8 +45,8 @@ class GoldenSetTest {
     }
 
     @Test
-    fun `каждый эталон разбирается в модель и содержит позиции`() {
-        assertEquals(21, slugs.size)
+    fun `набор не пуст и каждый эталон разбирается в модель`() {
+        assertTrue("в наборе нет ни одного эталона", slugs.isNotEmpty())
         for (slug in slugs) {
             val receipt = load(slug)
 

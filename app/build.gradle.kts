@@ -3,6 +3,43 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.0.21"
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
+    // Стиль проверяется и приводится командой ktlintFormat по правилам .editorconfig.
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+}
+
+// Версия движка зафиксирована отдельно: плагин не гарантирует, что между его
+// патч-версиями набор правил не поменяется.
+ktlint {
+    version.set("1.3.1")
+}
+
+// Подпись release задаётся только переменными окружения: ключ не лежит в
+// репозитории и не попадает в сборку из файла настроек.
+// Правило «всё или ничего»: любая заданная переменная требует остальных трёх и
+// существующего файла ключа. Иначе опечатка в имени переменной давала бы
+// неподписанный APK, который легко принять за релиз.
+val signingVariables =
+    listOf(
+        "ANDROID_KEYSTORE_PATH",
+        "ANDROID_KEYSTORE_PASSWORD",
+        "ANDROID_KEY_ALIAS",
+        "ANDROID_KEY_PASSWORD",
+    )
+val signingValues = signingVariables.associateWith { providers.environmentVariable(it).orNull }
+// Наличие переменной, а не её содержимое: пустое значение из секрета — тоже
+// заявка на подпись, и она должна падать, а не собирать неподписанный APK.
+val signingRequested = signingValues.values.any { it != null }
+val hasReleaseKeystore = signingRequested
+
+if (signingRequested) {
+    val missing = signingVariables.filter { signingValues[it].isNullOrBlank() }
+    require(missing.isEmpty()) {
+        "Подпись release: задана часть переменных, нет $missing"
+    }
+    val keystorePath = signingValues.getValue("ANDROID_KEYSTORE_PATH")!!
+    require(file(keystorePath).isFile) {
+        "Подпись release: файл keystore не найден: $keystorePath"
+    }
 }
 
 android {
@@ -36,6 +73,31 @@ android {
         abortOnError = true
         // Security-детекторы по умолчанию не спрашиваются (#2322).
         enable += listOf("Security")
+    }
+
+    // Блок signingConfigs объявлен до buildTypes: ссылка на конфигурацию внутри
+    // buildTypes работает только после её создания.
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(signingValues.getValue("ANDROID_KEYSTORE_PATH")!!)
+                storePassword = signingValues["ANDROID_KEYSTORE_PASSWORD"]
+                keyAlias = signingValues["ANDROID_KEY_ALIAS"]
+                keyPassword = signingValues["ANDROID_KEY_PASSWORD"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // R8 выключен: его правила для Compose и kotlinx.serialization нельзя
+            // проверить без прогона на устройстве. Это отдельная задача.
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 }
 

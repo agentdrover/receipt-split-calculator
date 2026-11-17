@@ -37,8 +37,9 @@ internal fun nextFailures(
     return when {
         !succeeded -> if (kind != null) base + kind else base
         kind == null -> base
-        kind == HistoryFailure.CLEAR -> base - HistoryFailure.CLEAR - HistoryFailure.DELETE -
-            HistoryFailure.SAVE
+        kind == HistoryFailure.CLEAR ->
+            base - HistoryFailure.CLEAR - HistoryFailure.DELETE -
+                HistoryFailure.SAVE
         else -> base - kind
     }
 }
@@ -68,8 +69,9 @@ internal fun nextFailuresAfterSave(
  * Хранилище и запись живут в ViewModel: область rememberCoroutineScope
  * отменяется вместе с Activity, и сохранение могло не начаться вовсе.
  */
-class HistoryViewModel(application: Application) : AndroidViewModel(application) {
-
+class HistoryViewModel(
+    application: Application,
+) : AndroidViewModel(application) {
     private val store = HistoryStore(File(application.filesDir, "history.json"))
 
     // Записи идут через очередь: неудачная не теряется, а ждёт повтора.
@@ -113,17 +115,23 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun loadLocked() {
         mutex.withLock {
             when (val result = withContext(Dispatchers.IO) { store.load() }) {
-                is HistoryLoad.Data -> state = state.copy(
-                    entries = result.entries,
-                    failures = nextFailures(state.failures, null, succeeded = true),
-                )
-                HistoryLoad.NoData -> state = state.copy(
-                    entries = emptyList(),
-                    failures = nextFailures(state.failures, null, succeeded = true),
-                )
-                is HistoryLoad.ReadFailure -> state = state.copy(
-                    failures = nextFailures(state.failures, HistoryFailure.READ, succeeded = false),
-                )
+                is HistoryLoad.Data ->
+                    state =
+                        state.copy(
+                            entries = result.entries,
+                            failures = nextFailures(state.failures, null, succeeded = true),
+                        )
+                HistoryLoad.NoData ->
+                    state =
+                        state.copy(
+                            entries = emptyList(),
+                            failures = nextFailures(state.failures, null, succeeded = true),
+                        )
+                is HistoryLoad.ReadFailure ->
+                    state =
+                        state.copy(
+                            failures = nextFailures(state.failures, HistoryFailure.READ, succeeded = false),
+                        )
             }
         }
     }
@@ -148,9 +156,10 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         mutex.withLock {
             val outcome = withContext(Dispatchers.IO) { runCatching { store.delete(id) } }.getOrNull()
             if (outcome == null) {
-                state = state.copy(
-                    failures = nextFailures(state.failures, HistoryFailure.DELETE, succeeded = false),
-                )
+                state =
+                    state.copy(
+                        failures = nextFailures(state.failures, HistoryFailure.DELETE, succeeded = false),
+                    )
                 return@withLock
             }
             when (outcome) {
@@ -161,9 +170,11 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
                     if (queue.pending.isEmpty()) failures = failures - HistoryFailure.SAVE
                     state = state.copy(entries = outcome.entries, failures = failures, saving = queue)
                 }
-                is DeleteOutcome.ReadFailure -> state = state.copy(
-                    failures = nextFailures(state.failures, HistoryFailure.READ, succeeded = false),
-                )
+                is DeleteOutcome.ReadFailure ->
+                    state =
+                        state.copy(
+                            failures = nextFailures(state.failures, HistoryFailure.READ, succeeded = false),
+                        )
             }
         }
     }
@@ -172,17 +183,19 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         mutex.withLock {
             val updated = withContext(Dispatchers.IO) { runCatching { store.clear() } }.getOrNull()
             if (updated == null) {
-                state = state.copy(
-                    failures = nextFailures(state.failures, HistoryFailure.CLEAR, succeeded = false),
-                )
+                state =
+                    state.copy(
+                        failures = nextFailures(state.failures, HistoryFailure.CLEAR, succeeded = false),
+                    )
                 return@withLock
             }
             val queue = withContext(Dispatchers.IO) { saver.cleared() }
-            state = state.copy(
-                entries = updated,
-                failures = nextFailures(state.failures, HistoryFailure.CLEAR, succeeded = true),
-                saving = queue,
-            )
+            state =
+                state.copy(
+                    entries = updated,
+                    failures = nextFailures(state.failures, HistoryFailure.CLEAR, succeeded = true),
+                    saving = queue,
+                )
         }
     }
 }

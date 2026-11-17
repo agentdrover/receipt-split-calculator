@@ -11,19 +11,24 @@ import androidx.security.crypto.MasterKey
  * файл настроек попадает в резервную копию только если приложение это
  * разрешает, а мы запрещаем (allowBackup=false).
  */
-class EncryptedSecretStore(context: Context) : SecretStore {
-
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        FILE_NAME,
-        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+class EncryptedSecretStore(
+    context: Context,
+) : SecretStore {
+    private val prefs =
+        EncryptedSharedPreferences.create(
+            context,
+            FILE_NAME,
+            MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
 
     override fun get(key: String): String? = prefs.getString(key, null)
 
-    override fun put(key: String, value: String) {
+    override fun put(
+        key: String,
+        value: String,
+    ) {
         prefs.edit().putString(key, value).apply()
     }
 

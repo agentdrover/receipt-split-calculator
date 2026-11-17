@@ -1,5 +1,6 @@
 package ru.chekcalc.ui.history
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,14 +29,16 @@ import ru.chekcalc.storage.HistoryEntry
 import ru.chekcalc.ui.review.DraftItem
 import ru.chekcalc.ui.review.formatKopecks
 import ru.chekcalc.ui.select.Choice
-import androidx.activity.compose.BackHandler
 
 /**
  * Просмотр сохранённого чека: позиции, отмеченные доли, чаевые и итог.
  * Только чтение: расчёт в истории не меняется.
  */
 @Composable
-fun HistoryDetailScreen(entry: HistoryEntry, onBack: () -> Unit) {
+fun HistoryDetailScreen(
+    entry: HistoryEntry,
+    onBack: () -> Unit,
+) {
     // Системный жест «назад» возвращает к списку истории.
     BackHandler { onBack() }
 
@@ -72,10 +75,11 @@ fun HistoryDetailScreen(entry: HistoryEntry, onBack: () -> Unit) {
         item(key = "items") {
             val choices = entry.selection.items.associateBy { it.id }
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surface),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.surface),
             ) {
                 entry.draft.items.forEachIndexed { index, item ->
                     if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -93,10 +97,11 @@ fun HistoryDetailScreen(entry: HistoryEntry, onBack: () -> Unit) {
 @Composable
 private fun TotalsCard(entry: HistoryEntry) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surface),
     ) {
         RowValue("Итог чека", formatKopecks(entry.draft.totalKopecks, entry.draft.currency))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -111,7 +116,11 @@ private fun TotalsCard(entry: HistoryEntry) {
 }
 
 @Composable
-private fun ItemRow(item: DraftItem, choice: Choice?, currency: String) {
+private fun ItemRow(
+    item: DraftItem,
+    choice: Choice?,
+    currency: String,
+) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -121,15 +130,16 @@ private fun ItemRow(item: DraftItem, choice: Choice?, currency: String) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = buildString {
-                    append(item.qtyText())
-                    append(" × ")
-                    append(formatKopecks(item.unitPriceKopecks, currency))
-                    if (choice != null) {
-                        append(" · ")
-                        append(choiceLabel(choice))
-                    }
-                },
+                text =
+                    buildString {
+                        append(item.qtyText())
+                        append(" × ")
+                        append(formatKopecks(item.unitPriceKopecks, currency))
+                        if (choice != null) {
+                            append(" · ")
+                            append(choiceLabel(choice))
+                        }
+                    },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -146,14 +156,19 @@ private fun ItemRow(item: DraftItem, choice: Choice?, currency: String) {
 private fun DraftItem.qtyText(): String =
     qty?.let { if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString() } ?: "1"
 
-private fun choiceLabel(choice: Choice): String = when (choice) {
-    Choice.None -> "не моё"
-    Choice.Whole -> "моё"
-    is Choice.Shared -> "1/${choice.denominator}"
-}
+private fun choiceLabel(choice: Choice): String =
+    when (choice) {
+        Choice.None -> "не моё"
+        Choice.Whole -> "моё"
+        is Choice.Shared -> "1/${choice.denominator}"
+    }
 
 @Composable
-private fun RowValue(label: String, value: String, bold: Boolean = false) {
+private fun RowValue(
+    label: String,
+    value: String,
+    bold: Boolean = false,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -165,8 +180,9 @@ private fun RowValue(label: String, value: String, bold: Boolean = false) {
         )
         Text(
             text = value,
-            style = (if (bold) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium)
-                .copy(fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal),
+            style =
+                (if (bold) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium)
+                    .copy(fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal),
         )
     }
 }

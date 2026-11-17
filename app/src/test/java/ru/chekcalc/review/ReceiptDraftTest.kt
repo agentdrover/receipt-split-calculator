@@ -7,19 +7,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.chekcalc.model.Discount
 import ru.chekcalc.model.Receipt
-import ru.chekcalc.ui.review.DraftItem
 import ru.chekcalc.model.ReceiptItem
 import ru.chekcalc.model.ServiceCharge
+import ru.chekcalc.ui.review.DraftItem
 import ru.chekcalc.ui.review.ReceiptDraft
 import ru.chekcalc.ui.review.deepRecognizeSummary
 
 class ReceiptDraftTest {
-
-    private fun receipt(vararg amounts: Double, total: Double = amounts.sum()) = Receipt(
+    private fun receipt(
+        vararg amounts: Double,
+        total: Double = amounts.sum(),
+    ) = Receipt(
         currency = "RUB",
-        items = amounts.mapIndexed { index, amount ->
-            ReceiptItem(name = "Позиция ${index + 1}", qty = 1.0, unitPrice = amount, amount = amount)
-        },
+        items =
+            amounts.mapIndexed { index, amount ->
+                ReceiptItem(name = "Позиция ${index + 1}", qty = 1.0, unitPrice = amount, amount = amount)
+            },
         discount = Discount(),
         serviceCharge = ServiceCharge(),
         total = total,
@@ -57,8 +60,10 @@ class ReceiptDraftTest {
         assertTrue("ожидаемая сумма по формуле: $warning", warning.contains("ожидалось 300 ₽"))
         assertTrue("итог чека: $warning", warning.contains("в чеке 350 ₽"))
         assertTrue("разница: $warning", warning.contains("разница 50 ₽"))
-        assertTrue("без скидки и обслуживания — подсказка про нераспознанную строку",
-            warning.contains("строка не распознана"))
+        assertTrue(
+            "без скидки и обслуживания — подсказка про нераспознанную строку",
+            warning.contains("строка не распознана"),
+        )
     }
 
     @Test
@@ -75,11 +80,16 @@ class ReceiptDraftTest {
     @Test
     fun `скидка учитывается в ожидаемой сумме`() {
         // Позиции 100, скидка 50 → ожидаем 50, в чеке 80, разница +30.
-        val draft = ReceiptDraft(
-            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
-            discountKopecks = 50_00,
-            totalKopecks = 80_00,
-        )
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Кофе", 1.0, 100_00),
+                    ),
+                discountKopecks = 50_00,
+                totalKopecks = 80_00,
+            )
 
         val warning = draft.residualWarning()!!
 
@@ -91,11 +101,16 @@ class ReceiptDraftTest {
     @Test
     fun `обслуживание прибавляется к ожидаемой сумме`() {
         // Позиции 100, обслуживание 10 → ожидаем 110, в чеке 130, разница +20.
-        val draft = ReceiptDraft(
-            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
-            serviceKopecks = 10_00,
-            totalKopecks = 130_00,
-        )
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Кофе", 1.0, 100_00),
+                    ),
+                serviceKopecks = 10_00,
+                totalKopecks = 130_00,
+            )
 
         val warning = draft.residualWarning()!!
 
@@ -106,11 +121,16 @@ class ReceiptDraftTest {
 
     @Test
     fun `подсказка называет скидку, когда она есть`() {
-        val draft = ReceiptDraft(
-            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
-            discountKopecks = 10_00,
-            totalKopecks = 150_00,
-        )
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Кофе", 1.0, 100_00),
+                    ),
+                discountKopecks = 10_00,
+                totalKopecks = 150_00,
+            )
 
         val warning = draft.residualWarning()!!
 
@@ -120,11 +140,16 @@ class ReceiptDraftTest {
 
     @Test
     fun `подсказка называет обслуживание, когда оно есть`() {
-        val draft = ReceiptDraft(
-            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
-            serviceKopecks = 10_00,
-            totalKopecks = 150_00,
-        )
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Кофе", 1.0, 100_00),
+                    ),
+                serviceKopecks = 10_00,
+                totalKopecks = 150_00,
+            )
 
         val warning = draft.residualWarning()!!
 
@@ -134,12 +159,17 @@ class ReceiptDraftTest {
 
     @Test
     fun `при скидке и обслуживании подсказка называет оба`() {
-        val draft = ReceiptDraft(
-            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
-            discountKopecks = 10_00,
-            serviceKopecks = 5_00,
-            totalKopecks = 150_00,
-        )
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Кофе", 1.0, 100_00),
+                    ),
+                discountKopecks = 10_00,
+                serviceKopecks = 5_00,
+                totalKopecks = 150_00,
+            )
 
         val warning = draft.residualWarning()!!
 
@@ -157,12 +187,17 @@ class ReceiptDraftTest {
 
     @Test
     fun `скидка и обслуживание входят в сверку`() {
-        val draft = ReceiptDraft(
-            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_00)),
-            discountKopecks = 10_00,
-            serviceKopecks = 5_00,
-            totalKopecks = 95_00,
-        )
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Кофе", 1.0, 100_00),
+                    ),
+                discountKopecks = 10_00,
+                serviceKopecks = 5_00,
+                totalKopecks = 95_00,
+            )
 
         assertTrue("100 − 10 + 5 = 95", draft.residualOk)
     }
@@ -190,20 +225,56 @@ class ReceiptDraftTest {
 
     @Test
     fun `сумма принимает запятую и точку`() {
-        assertEquals(1_250L, ru.chekcalc.ui.review.parseRubles("12,50"))
-        assertEquals(1_250L, ru.chekcalc.ui.review.parseRubles("12.50"))
-        assertEquals(1_200L, ru.chekcalc.ui.review.parseRubles("12"))
+        assertEquals(
+            1_250L,
+            ru.chekcalc.ui.review
+                .parseRubles("12,50"),
+        )
+        assertEquals(
+            1_250L,
+            ru.chekcalc.ui.review
+                .parseRubles("12.50"),
+        )
+        assertEquals(
+            1_200L,
+            ru.chekcalc.ui.review
+                .parseRubles("12"),
+        )
     }
 
     @Test
     fun `пустой и мусорный ввод не меняют сумму`() {
-        assertEquals(null, ru.chekcalc.ui.review.parseRubles(""))
-        assertEquals(null, ru.chekcalc.ui.review.parseRubles("  "))
-        assertEquals(null, ru.chekcalc.ui.review.parseRubles("NaN"))
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseRubles(""),
+        )
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseRubles("  "),
+        )
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseRubles("NaN"),
+        )
         // «12.» — незаконченный ввод, но число уже валидное: 12.00
-        assertEquals(1_200L, ru.chekcalc.ui.review.parseRubles("12."))
-        assertEquals(null, ru.chekcalc.ui.review.parseRubles("1e18"))
-        assertEquals(null, ru.chekcalc.ui.review.parseRubles("-5"))
+        assertEquals(
+            1_200L,
+            ru.chekcalc.ui.review
+                .parseRubles("12."),
+        )
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseRubles("1e18"),
+        )
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseRubles("-5"),
+        )
     }
 
     @Test
@@ -233,11 +304,12 @@ class ReceiptDraftTest {
 
     @Test
     fun `позиция без количества сохраняет сумму из чека`() {
-        val receipt = Receipt(
-            currency = "RUB",
-            items = listOf(ReceiptItem(name = "Сыр", qty = null, unitPrice = 100.0, amount = 300.0)),
-            total = 300.0,
-        )
+        val receipt =
+            Receipt(
+                currency = "RUB",
+                items = listOf(ReceiptItem(name = "Сыр", qty = null, unitPrice = 100.0, amount = 300.0)),
+                total = 300.0,
+            )
 
         val draft = ReceiptDraft.fromReceipt(receipt)
 
@@ -247,19 +319,52 @@ class ReceiptDraftTest {
     @Test
     fun `дробное количество считается без ошибки округления`() {
         // 199 ₽ × 0,205 = 40,795 → 40,80; через Double вышло бы 40,79.
-        val draft = ReceiptDraft(items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Сыр", 0.205, 199_00)))
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Сыр", 0.205, 199_00),
+                    ),
+            )
 
         assertEquals(40_80L, draft.itemsSumKopecks)
     }
 
     @Test
     fun `количество принимает запятую и отклоняет мусор`() {
-        assertEquals(2.5, ru.chekcalc.ui.review.parseQty("2,5")!!, 0.0001)
-        assertEquals(3.0, ru.chekcalc.ui.review.parseQty("3")!!, 0.0001)
-        assertEquals(null, ru.chekcalc.ui.review.parseQty(""))
-        assertEquals(null, ru.chekcalc.ui.review.parseQty("NaN"))
-        assertEquals(null, ru.chekcalc.ui.review.parseQty("-1"))
-        assertEquals(null, ru.chekcalc.ui.review.parseQty("100000"))
+        assertEquals(
+            2.5,
+            ru.chekcalc.ui.review
+                .parseQty("2,5")!!,
+            0.0001,
+        )
+        assertEquals(
+            3.0,
+            ru.chekcalc.ui.review
+                .parseQty("3")!!,
+            0.0001,
+        )
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseQty(""),
+        )
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseQty("NaN"),
+        )
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseQty("-1"),
+        )
+        assertEquals(
+            null,
+            ru.chekcalc.ui.review
+                .parseQty("100000"),
+        )
     }
 
     @Test
@@ -273,11 +378,16 @@ class ReceiptDraftTest {
 
     @Test
     fun `скидка больше позиций блокирует дальше`() {
-        val draft = ReceiptDraft(
-            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_000)),
-            totalKopecks = 100_000,
-            discountKopecks = 120_000,
-        )
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Кофе", 1.0, 100_000),
+                    ),
+                totalKopecks = 100_000,
+                discountKopecks = 120_000,
+            )
 
         assertTrue(!draft.canProceed)
         assertEquals("Скидка больше суммы позиций — исправьте", draft.blockingError)
@@ -291,10 +401,15 @@ class ReceiptDraftTest {
 
     @Test
     fun `расхождение OCR не блокирует дальше`() {
-        val draft = ReceiptDraft(
-            items = listOf(ru.chekcalc.ui.review.DraftItem(1, "Кофе", 1.0, 100_000)),
-            totalKopecks = 150_000,
-        )
+        val draft =
+            ReceiptDraft(
+                items =
+                    listOf(
+                        ru.chekcalc.ui.review
+                            .DraftItem(1, "Кофе", 1.0, 100_000),
+                    ),
+                totalKopecks = 150_000,
+            )
 
         assertTrue(draft.canProceed)
         assertTrue(draft.residualWarning() != null)
@@ -303,13 +418,14 @@ class ReceiptDraftTest {
 
     @Test
     fun `сумма без present не превращается в скидку`() {
-        val receipt = ru.chekcalc.model.Receipt(
-            currency = "RUB",
-            items = listOf(ru.chekcalc.model.ReceiptItem(name = "Кофе", amount = 100.0)),
-            total = 110.0,
-            discount = ru.chekcalc.model.Discount(present = false, amount = 50.0),
-            serviceCharge = ru.chekcalc.model.ServiceCharge(present = false, amount = 60.0),
-        )
+        val receipt =
+            ru.chekcalc.model.Receipt(
+                currency = "RUB",
+                items = listOf(ru.chekcalc.model.ReceiptItem(name = "Кофе", amount = 100.0)),
+                total = 110.0,
+                discount = ru.chekcalc.model.Discount(present = false, amount = 50.0),
+                serviceCharge = ru.chekcalc.model.ServiceCharge(present = false, amount = 60.0),
+            )
 
         val draft = ReceiptDraft.fromReceipt(receipt)
 
@@ -320,8 +436,10 @@ class ReceiptDraftTest {
 
 // Сводка после глубокого разбора: человек видит выгоду одной строкой.
 class DeepRecognizeSummaryTest {
-
-    private fun draft(vararg amounts: Long, total: Long) = ReceiptDraft(
+    private fun draft(
+        vararg amounts: Long,
+        total: Long,
+    ) = ReceiptDraft(
         items = amounts.mapIndexed { index, amount -> DraftItem(index + 1L, "Позиция", 1.0, amount) },
         totalKopecks = total,
     )

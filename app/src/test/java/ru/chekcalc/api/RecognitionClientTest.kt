@@ -9,7 +9,6 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -21,16 +20,16 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.TimeUnit
 
 class RecognitionClientTest {
-
     private lateinit var server: MockWebServer
     private val client = RecognitionClient()
     private val image = byteArrayOf(1, 2, 3, 4)
 
-    private val settings get() = ProviderSettings(
-        apiKey = "sk-test-1234",
-        baseUrl = server.url("/v1").toString().trimEnd('/'),
-        model = "deepseek-flash",
-    )
+    private val settings get() =
+        ProviderSettings(
+            apiKey = "sk-test-1234",
+            baseUrl = server.url("/v1").toString().trimEnd('/'),
+            model = "deepseek-flash",
+        )
 
     @Before
     fun setUp() {
@@ -46,7 +45,10 @@ class RecognitionClientTest {
         client.close()
     }
 
-    private fun answer(content: String, code: Int = 200) {
+    private fun answer(
+        content: String,
+        code: Int = 200,
+    ) {
         val escaped = content.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
         server.enqueue(
             MockResponse().setResponseCode(code).setBody(
@@ -55,157 +57,181 @@ class RecognitionClientTest {
         )
     }
 
-    private val goodReceipt = """
+    private val goodReceipt =
+        """
         {"currency":"RUB","items":[{"name":"Кофе","qty":1,"unit_price":390.25,"amount":390.25}],
          "discount":{"present":false,"amount":0},"service_charge":{"present":false,"amount":0},
          "total":390.25,"warnings":[]}
-    """.trimIndent()
+        """.trimIndent()
 
     @Test(timeout = 15_000)
-    fun `успешный ответ разбирается в модель`() = runBlocking {
-        answer(goodReceipt)
+    fun `успешный ответ разбирается в модель`() =
+        runBlocking {
+            answer(goodReceipt)
 
-        val result = client.recognize(image, settings)
+            val result = client.recognize(image, settings)
 
-        assertTrue(result is RecognitionResult.Success)
-        val receipt = (result as RecognitionResult.Success).receipt
-        assertEquals("RUB", receipt.currency)
-        assertEquals(1, receipt.items.size)
-        assertEquals("Кофе", receipt.items.first().name)
-        assertEquals(390.25, receipt.total, 0.001)
-    }
-
-    @Test(timeout = 15_000)
-    fun `запрос несёт ключ, модель и картинку в base64`() = runBlocking {
-        answer(goodReceipt)
-
-        client.recognize(image, settings)
-
-        val request = server.takeRequest()
-        assertEquals("/v1/chat/completions", request.path)
-        assertEquals("Bearer sk-test-1234", request.getHeader("Authorization"))
-        val body = request.body.readUtf8()
-        assertTrue("нет модели", body.contains("\"model\""))
-        assertTrue("нет картинки", body.contains("data:image/jpeg;base64,"))
-    }
-
-    @Test(timeout = 15_000)
-    fun `мусор дважды даёт ошибку разбора и ровно два запроса`() = runBlocking {
-        answer("это не json")
-        answer("и это тоже")
-
-        val result = client.recognize(image, settings)
-
-        assertTrue(result is RecognitionResult.Failure)
-        assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
-        assertEquals(2, server.requestCount)
-    }
-
-    @Test(timeout = 15_000)
-    fun `ответ по схеме без валюты отклоняется`() = runBlocking {
-        answer("""{"items":[{"name":"Кофе","amount":100.0}],"total":100.0}""")
-        answer("""{"items":[{"name":"Кофе","amount":100.0}],"total":100.0}""")
-
-        val result = client.recognize(image, settings)
-
-        assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
-        assertEquals(2, server.requestCount)
-    }
-
-    @Test(timeout = 15_000)
-    fun `пустой чек не повторяется`() = runBlocking {
-        answer("""{"currency":"RUB","items":[],"total":0.0,"warnings":["не читается"]}""")
-
-        val result = client.recognize(image, settings)
-
-        val failure = result as RecognitionResult.Failure
-        assertEquals(FailureKind.UNREADABLE, failure.kind)
-        assertFalse("пустой чек бессмысленно повторять", failure.retryable)
-        assertEquals(1, server.requestCount)
-    }
-
-    @Test(timeout = 15_000)
-    fun `отказ провайдера не повторяется`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"bad key"}"""))
-
-        val result = client.recognize(image, settings)
-
-        assertEquals(FailureKind.PROVIDER, (result as RecognitionResult.Failure).kind)
-        assertEquals(1, server.requestCount)
-    }
-
-    @Test(timeout = 15_000)
-    fun `молчащий провайдер даёт таймаут`() = runBlocking {
-        val impatient = RecognitionClient(
-            http = OkHttpClient.Builder()
-                .callTimeout(500, TimeUnit.MILLISECONDS)
-                .readTimeout(500, TimeUnit.MILLISECONDS)
-                .build(),
-        )
-        server.enqueue(MockResponse().setBody("{}").setBodyDelay(5, TimeUnit.SECONDS))
-
-        val result = impatient.recognize(image, settings)
-        impatient.close()
-
-        assertEquals(FailureKind.TIMEOUT, (result as RecognitionResult.Failure).kind)
-    }
-
-    @Test(timeout = 15_000)
-    fun `невалидный ответ не утекает в расчёт`() = runBlocking {
-        answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":-5.0}],"total":-5.0}""")
-        answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":-5.0}],"total":-5.0}""")
-
-        val result = client.recognize(image, settings)
-
-        assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
-    }
-
-    @Test(timeout = 15_000)
-    fun `отрицательная цена позиции отклоняется`() = runBlocking {
-        answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"unit_price":-1.0,"amount":10.0}],"total":10.0}""")
-        answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"unit_price":-1.0,"amount":10.0}],"total":10.0}""")
-
-        val result = client.recognize(image, settings)
-
-        assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
-    }
-
-    @Test(timeout = 15_000)
-    fun `итог вне диапазона отклоняется`() = runBlocking {
-        answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":1e18}],"total":1e18}""")
-        answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":1e18}],"total":1e18}""")
-
-        val result = client.recognize(image, settings)
-
-        assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
-    }
-
-    @Test(timeout = 15_000)
-    fun `провайдер с Retry-After не получает скрытых повторов`() = runBlocking {
-        // Два ответа, чтобы увидеть, повторяет ли OkHttp сам при Retry-After.
-        repeat(2) {
-            server.enqueue(
-                MockResponse().setResponseCode(503).setHeader("Retry-After", "0").setBody("""{"error":"busy"}"""),
-            )
+            assertTrue(result is RecognitionResult.Success)
+            val receipt = (result as RecognitionResult.Success).receipt
+            assertEquals("RUB", receipt.currency)
+            assertEquals(1, receipt.items.size)
+            assertEquals("Кофе", receipt.items.first().name)
+            assertEquals(390.25, receipt.total, 0.001)
         }
 
-        val result = client.recognize(image, settings)
+    @Test(timeout = 15_000)
+    fun `запрос несёт ключ, модель и картинку в base64`() =
+        runBlocking {
+            answer(goodReceipt)
 
-        assertEquals(FailureKind.PROVIDER, (result as RecognitionResult.Failure).kind)
-        // Транспортный повтор OkHttp на 503 с Retry-After: 0: это его поведение,
-        // не наше. Проверяем, что оно ограничено одним разом и видно по запросам.
-        assertEquals("OkHttp повторяет 503 с Retry-After один раз", 2, server.requestCount)
-    }
+            client.recognize(image, settings)
+
+            val request = server.takeRequest()
+            assertEquals("/v1/chat/completions", request.path)
+            assertEquals("Bearer sk-test-1234", request.getHeader("Authorization"))
+            val body = request.body.readUtf8()
+            assertTrue("нет модели", body.contains("\"model\""))
+            assertTrue("нет картинки", body.contains("data:image/jpeg;base64,"))
+        }
 
     @Test(timeout = 15_000)
-    fun `скидка вне диапазона отклоняется`() = runBlocking {
-        answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":10.0}],"discount":{"present":true,"amount":1e18},"total":10.0}""")
-        answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":10.0}],"discount":{"present":true,"amount":1e18},"total":10.0}""")
+    fun `мусор дважды даёт ошибку разбора и ровно два запроса`() =
+        runBlocking {
+            answer("это не json")
+            answer("и это тоже")
 
-        val result = client.recognize(image, settings)
+            val result = client.recognize(image, settings)
 
-        assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
-    }
+            assertTrue(result is RecognitionResult.Failure)
+            assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
+            assertEquals(2, server.requestCount)
+        }
+
+    @Test(timeout = 15_000)
+    fun `ответ по схеме без валюты отклоняется`() =
+        runBlocking {
+            answer("""{"items":[{"name":"Кофе","amount":100.0}],"total":100.0}""")
+            answer("""{"items":[{"name":"Кофе","amount":100.0}],"total":100.0}""")
+
+            val result = client.recognize(image, settings)
+
+            assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
+            assertEquals(2, server.requestCount)
+        }
+
+    @Test(timeout = 15_000)
+    fun `пустой чек не повторяется`() =
+        runBlocking {
+            answer("""{"currency":"RUB","items":[],"total":0.0,"warnings":["не читается"]}""")
+
+            val result = client.recognize(image, settings)
+
+            val failure = result as RecognitionResult.Failure
+            assertEquals(FailureKind.UNREADABLE, failure.kind)
+            assertFalse("пустой чек бессмысленно повторять", failure.retryable)
+            assertEquals(1, server.requestCount)
+        }
+
+    @Test(timeout = 15_000)
+    fun `отказ провайдера не повторяется`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"bad key"}"""))
+
+            val result = client.recognize(image, settings)
+
+            assertEquals(FailureKind.PROVIDER, (result as RecognitionResult.Failure).kind)
+            assertEquals(1, server.requestCount)
+        }
+
+    @Test(timeout = 15_000)
+    fun `молчащий провайдер даёт таймаут`() =
+        runBlocking {
+            val impatient =
+                RecognitionClient(
+                    http =
+                        OkHttpClient
+                            .Builder()
+                            .callTimeout(500, TimeUnit.MILLISECONDS)
+                            .readTimeout(500, TimeUnit.MILLISECONDS)
+                            .build(),
+                )
+            server.enqueue(MockResponse().setBody("{}").setBodyDelay(5, TimeUnit.SECONDS))
+
+            val result = impatient.recognize(image, settings)
+            impatient.close()
+
+            assertEquals(FailureKind.TIMEOUT, (result as RecognitionResult.Failure).kind)
+        }
+
+    @Test(timeout = 15_000)
+    fun `невалидный ответ не утекает в расчёт`() =
+        runBlocking {
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":-5.0}],"total":-5.0}""")
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":-5.0}],"total":-5.0}""")
+
+            val result = client.recognize(image, settings)
+
+            assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
+        }
+
+    @Test(timeout = 15_000)
+    fun `отрицательная цена позиции отклоняется`() =
+        runBlocking {
+            answer(
+                """{"currency":"RUB","items":[{"name":"Кофе","qty":1,"unit_price":-1.0,"amount":10.0}],"total":10.0}""",
+            )
+            answer(
+                """{"currency":"RUB","items":[{"name":"Кофе","qty":1,"unit_price":-1.0,"amount":10.0}],"total":10.0}""",
+            )
+
+            val result = client.recognize(image, settings)
+
+            assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
+        }
+
+    @Test(timeout = 15_000)
+    fun `итог вне диапазона отклоняется`() =
+        runBlocking {
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":1e18}],"total":1e18}""")
+            answer("""{"currency":"RUB","items":[{"name":"Кофе","amount":1e18}],"total":1e18}""")
+
+            val result = client.recognize(image, settings)
+
+            assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
+        }
+
+    @Test(timeout = 15_000)
+    fun `провайдер с Retry-After не получает скрытых повторов`() =
+        runBlocking {
+            // Два ответа, чтобы увидеть, повторяет ли OkHttp сам при Retry-After.
+            repeat(2) {
+                server.enqueue(
+                    MockResponse().setResponseCode(503).setHeader("Retry-After", "0").setBody("""{"error":"busy"}"""),
+                )
+            }
+
+            val result = client.recognize(image, settings)
+
+            assertEquals(FailureKind.PROVIDER, (result as RecognitionResult.Failure).kind)
+            // Транспортный повтор OkHttp на 503 с Retry-After: 0: это его поведение,
+            // не наше. Проверяем, что оно ограничено одним разом и видно по запросам.
+            assertEquals("OkHttp повторяет 503 с Retry-After один раз", 2, server.requestCount)
+        }
+
+    @Test(timeout = 15_000)
+    fun `скидка вне диапазона отклоняется`() =
+        runBlocking {
+            answer(
+                """{"currency":"RUB","items":[{"name":"Кофе","amount":10.0}],"discount":{"present":true,"amount":1e18},"total":10.0}""",
+            )
+            answer(
+                """{"currency":"RUB","items":[{"name":"Кофе","amount":10.0}],"discount":{"present":true,"amount":1e18},"total":10.0}""",
+            )
+
+            val result = client.recognize(image, settings)
+
+            assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
+        }
 
     @Test(timeout = 15_000)
     fun `слишком большой ответ не разбирается`() {
@@ -244,7 +270,10 @@ class RecognitionClientTest {
     fun `тело запроса несёт отключённое размышление и остаётся валидным JSON`() {
         val body = client.buildJsonObject("deepseek-flash", "data:image/jpeg;base64,AA", disableThinking = true)
         assertTrue(body.contains("\"thinking\":{\"type\":\"disabled\"}"))
-        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject
+        val parsed =
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(body)
+                .jsonObject
         assertEquals("deepseek-flash", parsed["model"]!!.jsonPrimitive.content)
 
         val without = client.buildJsonObject("deepseek-flash", "data:image/jpeg;base64,AA", disableThinking = false)
@@ -252,48 +281,51 @@ class RecognitionClientTest {
     }
 
     @Test(timeout = 15_000)
-    fun `два прогона объединяют позиции без дублей`() = runBlocking {
-        val twoShots = RecognitionClient(doubleSample = { true })
-        try {
-            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":200.0}""")
-            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0},{"name":"Чай","qty":1,"amount":100.0}],"total":200.0}""")
+    fun `два прогона объединяют позиции без дублей`() =
+        runBlocking {
+            val twoShots = RecognitionClient(doubleSample = { true })
+            try {
+                answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":200.0}""")
+                answer(
+                    """{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0},{"name":"Чай","qty":1,"amount":100.0}],"total":200.0}""",
+                )
 
-            val result = twoShots.recognize(image, settings)
+                val result = twoShots.recognize(image, settings)
 
-            val receipt = (result as RecognitionResult.Success).receipt
-            assertEquals(2, receipt.items.size)
-            assertEquals(setOf("Кофе", "Чай"), receipt.items.map { it.name }.toSet())
-            assertEquals(2, server.requestCount)
-        } finally {
-            twoShots.close()
+                val receipt = (result as RecognitionResult.Success).receipt
+                assertEquals(2, receipt.items.size)
+                assertEquals(setOf("Кофе", "Чай"), receipt.items.map { it.name }.toSet())
+                assertEquals(2, server.requestCount)
+            } finally {
+                twoShots.close()
+            }
         }
-    }
 
     @Test(timeout = 15_000)
-    fun `расхождение итогов повторяется с размышлением`() = runBlocking {
-        val twoShots = RecognitionClient(doubleSample = { true })
-        try {
-            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":100.0}""")
-            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":300.0}""")
-            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0},{"name":"Торт","qty":1,"amount":200.0}],"total":300.0}""")
+    fun `расхождение итогов повторяется с размышлением`() =
+        runBlocking {
+            val twoShots = RecognitionClient(doubleSample = { true })
+            try {
+                answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":100.0}""")
+                answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":300.0}""")
+                answer(
+                    """{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0},{"name":"Торт","qty":1,"amount":200.0}],"total":300.0}""",
+                )
 
-            val result = twoShots.recognize(image, settings)
+                val result = twoShots.recognize(image, settings)
 
-            val receipt = (result as RecognitionResult.Success).receipt
-            assertEquals(300.0, receipt.total, 0.001)
-            assertEquals(2, receipt.items.size)
-            assertEquals(3, server.requestCount)
-            server.takeRequest()
-            server.takeRequest()
-            val retryBody = server.takeRequest().body.readUtf8()
-            assertFalse("повтор должен быть без отключённого размышления", retryBody.contains("\"disabled\""))
-        } finally {
-            twoShots.close()
+                val receipt = (result as RecognitionResult.Success).receipt
+                assertEquals(300.0, receipt.total, 0.001)
+                assertEquals(2, receipt.items.size)
+                assertEquals(3, server.requestCount)
+                server.takeRequest()
+                server.takeRequest()
+                val retryBody = server.takeRequest().body.readUtf8()
+                assertFalse("повтор должен быть без отключённого размышления", retryBody.contains("\"disabled\""))
+            } finally {
+                twoShots.close()
+            }
         }
-    }
-
-
-
 
     @Test
     fun `допуск по итогам не больше процента`() {
@@ -302,34 +334,41 @@ class RecognitionClientTest {
     }
 
     @Test(timeout = 15_000)
-    fun `невалидный повтор с размышлением не запускает новый круг`() = runBlocking {
-        val twoShots = RecognitionClient(doubleSample = { true })
-        try {
-            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":100.0}""")
-            answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":300.0}""")
-            answer("это не json")
+    fun `невалидный повтор с размышлением не запускает новый круг`() =
+        runBlocking {
+            val twoShots = RecognitionClient(doubleSample = { true })
+            try {
+                answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":100.0}""")
+                answer("""{"currency":"RUB","items":[{"name":"Кофе","qty":1,"amount":100.0}],"total":300.0}""")
+                answer("это не json")
 
-            val result = twoShots.recognize(image, settings)
+                val result = twoShots.recognize(image, settings)
 
-            assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
-            assertEquals(3, server.requestCount)
-        } finally {
-            twoShots.close()
+                assertEquals(FailureKind.INVALID_RESPONSE, (result as RecognitionResult.Failure).kind)
+                assertEquals(3, server.requestCount)
+            } finally {
+                twoShots.close()
+            }
         }
-    }
-
 
     @Test
     fun `обслуживание учитывается при проверке превышения`() {
-        val first = Receipt(
-            currency = "RUB",
-            items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
-            serviceCharge = ServiceCharge(present = true, amount = 100.0),
-            total = 1100.0,
-        )
-        val second = first.copy(
-            items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0), ReceiptItem(name = "Торт", amount = 100.0)),
-        )
+        val first =
+            Receipt(
+                currency = "RUB",
+                items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
+                serviceCharge = ServiceCharge(present = true, amount = 100.0),
+                total = 1100.0,
+            )
+        val second =
+            first.copy(
+                items =
+                    listOf(
+                        ReceiptItem(name = "Кофе", amount = 900.0),
+                        ReceiptItem(name = "Торт", amount = 100.0),
+                        ReceiptItem(name = "Торт", amount = 100.0),
+                    ),
+            )
 
         val picked = client.pickReceipt(first, second)
 
@@ -338,14 +377,16 @@ class RecognitionClientTest {
 
     @Test
     fun `копеечный итог не прощает двойного счёта`() {
-        val first = Receipt(
-            currency = "RUB",
-            items = listOf(ReceiptItem(name = "Кофе", qty = 2.0, amount = 1.0)),
-            total = 1.0,
-        )
-        val second = first.copy(
-            items = listOf(ReceiptItem(name = "Кофе", amount = 0.5), ReceiptItem(name = "Кофе", amount = 0.5)),
-        )
+        val first =
+            Receipt(
+                currency = "RUB",
+                items = listOf(ReceiptItem(name = "Кофе", qty = 2.0, amount = 1.0)),
+                total = 1.0,
+            )
+        val second =
+            first.copy(
+                items = listOf(ReceiptItem(name = "Кофе", amount = 0.5), ReceiptItem(name = "Кофе", amount = 0.5)),
+            )
 
         val picked = client.pickReceipt(first, second)
 
@@ -355,17 +396,19 @@ class RecognitionClientTest {
 
     @Test
     fun `согласованный ответ с обслуживанием важнее слияния`() {
-        val withoutService = Receipt(
-            currency = "RUB",
-            items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
-            total = 1100.0,
-        )
-        val withService = Receipt(
-            currency = "RUB",
-            items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
-            serviceCharge = ServiceCharge(present = true, amount = 100.0),
-            total = 1100.0,
-        )
+        val withoutService =
+            Receipt(
+                currency = "RUB",
+                items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
+                total = 1100.0,
+            )
+        val withService =
+            Receipt(
+                currency = "RUB",
+                items = listOf(ReceiptItem(name = "Кофе", amount = 900.0), ReceiptItem(name = "Торт", amount = 100.0)),
+                serviceCharge = ServiceCharge(present = true, amount = 100.0),
+                total = 1100.0,
+            )
 
         val picked = client.pickReceipt(withoutService, withService)
 
@@ -373,41 +416,39 @@ class RecognitionClientTest {
         assertEquals(100.0, picked.serviceCharge.amount, 0.001)
     }
 
-
-
-
-
     @Test(timeout = 15_000)
-    fun `отказ провайдера не повторяется даже при втором невалидном ответе`() = runBlocking {
-        val twoShots = RecognitionClient(doubleSample = { true })
-        try {
-            answer("это не json")
-            answer("{}", code = 401)
+    fun `отказ провайдера не повторяется даже при втором невалидном ответе`() =
+        runBlocking {
+            val twoShots = RecognitionClient(doubleSample = { true })
+            try {
+                answer("это не json")
+                answer("{}", code = 401)
 
-            val result = twoShots.recognize(image, settings)
+                val result = twoShots.recognize(image, settings)
 
-            assertTrue(result is RecognitionResult.Failure)
-            assertEquals(2, server.requestCount)
-        } finally {
-            twoShots.close()
+                assertTrue(result is RecognitionResult.Failure)
+                assertEquals(2, server.requestCount)
+            } finally {
+                twoShots.close()
+            }
         }
-    }
-
-
 
     @Test
     fun `из двух согласованных ответов берём более подробный`() {
-        val first = Receipt(
-            currency = "RUB",
-            items = listOf(ReceiptItem(name = "Кофе", qty = 2.0, amount = 200.0)),
-            total = 200.0,
-        )
-        val second = first.copy(
-            items = listOf(
-                ReceiptItem(name = "Кофе", amount = 100.0),
-                ReceiptItem(name = "Кофе", amount = 100.0),
-            ),
-        )
+        val first =
+            Receipt(
+                currency = "RUB",
+                items = listOf(ReceiptItem(name = "Кофе", qty = 2.0, amount = 200.0)),
+                total = 200.0,
+            )
+        val second =
+            first.copy(
+                items =
+                    listOf(
+                        ReceiptItem(name = "Кофе", amount = 100.0),
+                        ReceiptItem(name = "Кофе", amount = 100.0),
+                    ),
+            )
 
         val picked = client.pickReceipt(first, second)
 
@@ -417,19 +458,22 @@ class RecognitionClientTest {
 
     @Test
     fun `согласованный ответ важнее подробного несогласованного`() {
-        val broken = Receipt(
-            currency = "RUB",
-            items = listOf(
-                ReceiptItem(name = "Кофе", amount = 100.0),
-                ReceiptItem(name = "Торт", amount = 100.0),
-                ReceiptItem(name = "Чай", amount = 100.0),
-            ),
-            total = 500.0,
-        )
-        val good = broken.copy(
-            items = listOf(ReceiptItem(name = "Кофе", amount = 200.0)),
-            total = 200.0,
-        )
+        val broken =
+            Receipt(
+                currency = "RUB",
+                items =
+                    listOf(
+                        ReceiptItem(name = "Кофе", amount = 100.0),
+                        ReceiptItem(name = "Торт", amount = 100.0),
+                        ReceiptItem(name = "Чай", amount = 100.0),
+                    ),
+                total = 500.0,
+            )
+        val good =
+            broken.copy(
+                items = listOf(ReceiptItem(name = "Кофе", amount = 200.0)),
+                total = 200.0,
+            )
 
         assertEquals(good, client.pickReceipt(broken, good))
     }
@@ -438,31 +482,42 @@ class RecognitionClientTest {
 // Глубокий разбор: флаг в теле запроса и его источник в настройках.
 private class MemorySecretStore : ru.chekcalc.storage.SecretStore {
     private val values = mutableMapOf<String, String>()
+
     override fun get(key: String): String? = values[key]
-    override fun put(key: String, value: String) { values[key] = value }
-    override fun remove(key: String) { values.remove(key) }
+
+    override fun put(
+        key: String,
+        value: String,
+    ) {
+        values[key] = value
+    }
+
+    override fun remove(key: String) {
+        values.remove(key)
+    }
 }
 
 class DeepThinkingTest {
-
     @Test
     fun `по умолчанию размышление отключено для DeepSeek`() {
-        val body = RecognitionClient().buildJsonObject(
-            model = "deepseek-flash",
-            dataUrl = "data:image/jpeg;base64,AA==",
-            disableThinking = true,
-        )
+        val body =
+            RecognitionClient().buildJsonObject(
+                model = "deepseek-flash",
+                dataUrl = "data:image/jpeg;base64,AA==",
+                disableThinking = true,
+            )
 
         assertTrue(body.contains("\"thinking\":{\"type\":\"disabled\"}"))
     }
 
     @Test
     fun `в глубоком режиме флага disabled нет`() {
-        val body = RecognitionClient().buildJsonObject(
-            model = "deepseek-flash",
-            dataUrl = "data:image/jpeg;base64,AA==",
-            disableThinking = false,
-        )
+        val body =
+            RecognitionClient().buildJsonObject(
+                model = "deepseek-flash",
+                dataUrl = "data:image/jpeg;base64,AA==",
+                disableThinking = false,
+            )
 
         assertFalse(body.contains("\"disabled\""))
     }
@@ -474,15 +529,16 @@ class DeepThinkingTest {
 
         assertFalse(repository.load().deepThinking)
 
-        val saved = repository.save(
-            ru.chekcalc.storage.ProviderSettings(
-                providerId = "deepseek",
-                apiKey = "sk-test",
-                baseUrl = "https://api.deepseek.com",
-                model = "deepseek-flash",
-                deepThinking = true,
-            ),
-        )
+        val saved =
+            repository.save(
+                ru.chekcalc.storage.ProviderSettings(
+                    providerId = "deepseek",
+                    apiKey = "sk-test",
+                    baseUrl = "https://api.deepseek.com",
+                    model = "deepseek-flash",
+                    deepThinking = true,
+                ),
+            )
         assertTrue(saved is ru.chekcalc.storage.SaveResult.Saved)
         assertTrue(repository.load().deepThinking)
     }

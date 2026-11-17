@@ -2,9 +2,9 @@ package ru.chekcalc.ui.manual
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.chekcalc.calc.Money
+import ru.chekcalc.ui.components.BackButton
 import ru.chekcalc.ui.review.MoneyField
 import ru.chekcalc.ui.review.QuantityField
 import ru.chekcalc.ui.review.ReceiptDraft
@@ -34,7 +35,6 @@ import ru.chekcalc.ui.review.formatQty
 import ru.chekcalc.ui.review.parseQty
 import ru.chekcalc.ui.review.parseRubles
 import ru.chekcalc.ui.review.rublesText
-import ru.chekcalc.ui.components.BackButton
 
 /**
  * Ручной ввод чека: позиции, итог, скидка и обслуживание.
@@ -61,34 +61,41 @@ fun ManualEntryScreen(
     // поворота вернулось бы к прежнему числу из черновика.
     val texts = rememberSaveable(saver = TextMapSaver) { mutableStateMapOf<String, String>() }
 
-    fun text(key: String, value: String): String = texts[key] ?: value
+    fun text(
+        key: String,
+        value: String,
+    ): String = texts[key] ?: value
 
-    val totalsInvalid = listOf("total", "discount", "service").any { key ->
-        val fallback = when (key) {
-            "total" -> rublesText(draft.totalKopecks)
-            "discount" -> rublesText(draft.discountKopecks)
-            else -> rublesText(draft.serviceKopecks)
+    val totalsInvalid =
+        listOf("total", "discount", "service").any { key ->
+            val fallback =
+                when (key) {
+                    "total" -> rublesText(draft.totalKopecks)
+                    "discount" -> rublesText(draft.discountKopecks)
+                    else -> rublesText(draft.serviceKopecks)
+                }
+            parseRubles(text(key, fallback)) == null
         }
-        parseRubles(text(key, fallback)) == null
-    }
-    val linesInvalid = draft.items.any { item ->
-        val price = texts[priceKey(item.id)] ?: rublesText(item.unitPriceKopecks)
-        val qty = texts[qtyKey(item.id)] ?: item.qty?.let { formatQty(it) } ?: ""
-        val qtyValue = if (qty.isBlank()) null else parseQty(qty)
-        parseRubles(price) == null ||
-            (qty.isNotBlank() && (qtyValue == null || qtyValue <= 0.0)) ||
-            item.amountKopecks > ManualReceipt.MAX_AMOUNT_KOPECKS
-    }
+    val linesInvalid =
+        draft.items.any { item ->
+            val price = texts[priceKey(item.id)] ?: rublesText(item.unitPriceKopecks)
+            val qty = texts[qtyKey(item.id)] ?: item.qty?.let { formatQty(it) } ?: ""
+            val qtyValue = if (qty.isBlank()) null else parseQty(qty)
+            parseRubles(price) == null ||
+                (qty.isNotBlank() && (qtyValue == null || qtyValue <= 0.0)) ||
+                item.amountKopecks > ManualReceipt.MAX_AMOUNT_KOPECKS
+        }
     val hasItems = ManualReceipt.isReady(draft)
     val ready = hasItems && !totalsInvalid && !linesInvalid
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            // Android 15 рисует приложение edge-to-edge: без инсетов
-            // поля уходят под статус-бар и панель навигации.
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(22.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                // Android 15 рисует приложение edge-to-edge: без инсетов
+                // поля уходят под статус-бар и панель навигации.
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "header") {
@@ -153,11 +160,12 @@ fun ManualEntryScreen(
                     label = { Text("Позиция") },
                     singleLine = true,
                     isError = nameMissing,
-                    supportingText = if (nameMissing) {
-                        { Text("Введите название") }
-                    } else {
-                        null
-                    },
+                    supportingText =
+                        if (nameMissing) {
+                            { Text("Введите название") }
+                        } else {
+                            null
+                        },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
@@ -187,13 +195,15 @@ fun ManualEntryScreen(
                     )
                     Text(
                         text = Money.format(item.amountKopecks),
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = if (amountTooBig) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        ),
+                        style =
+                            MaterialTheme.typography.bodyMedium.copy(
+                                color =
+                                    if (amountTooBig) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                            ),
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
                     )
@@ -223,12 +233,13 @@ fun ManualEntryScreen(
                         // Подсказка называет настоящую причину: позиций нет,
                         // строка пустая или в полях ошибка. «Добавьте позицию»
                         // при уже добавленной строке вводила бы в заблуждение.
-                        text = when {
-                            draft.items.isEmpty() -> "Добавьте хотя бы одну позицию с названием."
-                            draft.items.all { it.name.isBlank() && it.amountKopecks == 0L } ->
-                                "Заполните позицию или удалите пустую строку."
-                            else -> "Проверьте выделенные поля."
-                        },
+                        text =
+                            when {
+                                draft.items.isEmpty() -> "Добавьте хотя бы одну позицию с названием."
+                                draft.items.all { it.name.isBlank() && it.amountKopecks == 0L } ->
+                                    "Заполните позицию или удалите пустую строку."
+                                else -> "Проверьте выделенные поля."
+                            },
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 4.dp),
                     )
@@ -255,13 +266,14 @@ private fun qtyKey(id: Long): String = "qty:$id"
  * Сохранение карты текстов полей: плоский список «ключ, значение, …».
  * Список строк переживает пересоздание Activity, SnapshotStateMap — нет.
  */
-private val TextMapSaver: Saver<SnapshotStateMap<String, String>, List<String>> = Saver(
-    save = { map -> map.flatMap { (key, value) -> listOf(key, value) } },
-    restore = { saved ->
-        mutableStateMapOf<String, String>().apply {
-            saved.chunked(2).forEach { pair ->
-                if (pair.size == 2) put(pair[0], pair[1])
+private val TextMapSaver: Saver<SnapshotStateMap<String, String>, List<String>> =
+    Saver(
+        save = { map -> map.flatMap { (key, value) -> listOf(key, value) } },
+        restore = { saved ->
+            mutableStateMapOf<String, String>().apply {
+                saved.chunked(2).forEach { pair ->
+                    if (pair.size == 2) put(pair[0], pair[1])
+                }
             }
-        }
-    },
-)
+        },
+    )

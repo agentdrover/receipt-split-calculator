@@ -10,8 +10,10 @@ import java.io.InputStream
  * выглядело бы как успех. Поэтому при превышении возвращаем null.
  */
 internal object ResponseReader {
-
-    fun read(stream: InputStream, maxBytes: Int = MAX_RESPONSE_BYTES): String? {
+    fun read(
+        stream: InputStream,
+        maxBytes: Int = MAX_RESPONSE_BYTES,
+    ): String? {
         val out = ByteArrayOutputStream()
         val chunk = ByteArray(8 * 1024)
         while (true) {

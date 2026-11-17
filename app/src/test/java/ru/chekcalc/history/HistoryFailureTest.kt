@@ -8,7 +8,6 @@ import ru.chekcalc.ui.history.nextFailures
 import ru.chekcalc.ui.history.nextFailuresAfterSave
 
 class HistoryFailureTest {
-
     @Test
     fun `неудача добавляет свой вид`() {
         assertEquals(

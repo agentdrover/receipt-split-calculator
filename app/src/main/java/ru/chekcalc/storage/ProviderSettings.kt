@@ -12,10 +12,14 @@ data class ProviderSettings(
 
 sealed interface SaveResult {
     /** Настройки сохранены; [keyReentryRequired] — адрес сменился, ключ стёрт. */
-    data class Saved(val keyReentryRequired: Boolean = false) : SaveResult
+    data class Saved(
+        val keyReentryRequired: Boolean = false,
+    ) : SaveResult
 
     /** Адрес не https или пустой — ключ не сохраняется. */
-    data class InvalidUrl(val reason: String) : SaveResult
+    data class InvalidUrl(
+        val reason: String,
+    ) : SaveResult
 }
 
 /**
@@ -24,8 +28,9 @@ sealed interface SaveResult {
  * Инварианты: адрес только https; ключ привязан к адресу и к провайдеру.
  * Смена адреса стирает ключ этого провайдера, чужие ключи не трогает.
  */
-class SettingsRepository(private val store: SecretStore) {
-
+class SettingsRepository(
+    private val store: SecretStore,
+) {
     fun activeProvider(): ProviderPreset {
         migrateLegacyOnce()
         return ProviderPreset.byId(store.get(KEY_ACTIVE_PROVIDER))
@@ -37,11 +42,12 @@ class SettingsRepository(private val store: SecretStore) {
         val storedKey = store.get(keyApiKey(preset.id)).orEmpty()
         // Ключ отдаём только если он привязан именно к этому адресу:
         // иначе он мог бы уйти на чужой хост.
-        val key = if (storedKey.isNotEmpty() && store.get(keyBoundUrl(preset.id)) == baseUrl) {
-            storedKey
-        } else {
-            ""
-        }
+        val key =
+            if (storedKey.isNotEmpty() && store.get(keyBoundUrl(preset.id)) == baseUrl) {
+                storedKey
+            } else {
+                ""
+            }
         return ProviderSettings(
             providerId = preset.id,
             apiKey = key,
@@ -104,8 +110,9 @@ class SettingsRepository(private val store: SecretStore) {
         val currentUrl = store.get(keyBaseUrl(custom))
         // Ключ из старых настроек принадлежит старому адресу. Переносим его,
         // только если «свой адрес» ещё не задан или совпадает со старым.
-        val sameTarget = currentUrl == null ||
-            (legacyUrl != null && currentUrl == legacyUrl.trim().trimEnd('/'))
+        val sameTarget =
+            currentUrl == null ||
+                (legacyUrl != null && currentUrl == legacyUrl.trim().trimEnd('/'))
 
         if (legacyUrl != null && currentUrl == null) {
             store.put(keyBaseUrl(custom), legacyUrl)
@@ -132,14 +139,16 @@ class SettingsRepository(private val store: SecretStore) {
         store.remove(LEGACY_BOUND_URL)
     }
 
-    private fun isHttps(url: String): Boolean =
-        url.startsWith("https://") && url.length > "https://".length
+    private fun isHttps(url: String): Boolean = url.startsWith("https://") && url.length > "https://".length
 
     private fun keyApiKey(id: String) = "api_key_$id"
+
     private fun keyBaseUrl(id: String) = "base_url_$id"
+
     private fun keyModel(id: String) = "model_$id"
 
     private fun keyDeepThinking(id: String) = "deep_thinking_$id"
+
     private fun keyBoundUrl(id: String) = "key_bound_url_$id"
 
     private companion object {

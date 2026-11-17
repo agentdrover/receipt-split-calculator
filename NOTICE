@@ -1,0 +1,17 @@
+# Сторонние материалы
+
+## Код
+
+Код репозитория распространяется по лицензии MIT — полный текст в [LICENSE](LICENSE).
+
+## Фотографии эталонных чеков
+
+Каталог `app/src/test/resources/golden/` содержит 21 фотографию чеков из
+открытых источников: Wikimedia Commons и CORD v2 (NAVER Clova).
+
+Авторы, источники и лицензии перечислены в
+[app/src/test/resources/golden/ATTRIBUTION.md](app/src/test/resources/golden/ATTRIBUTION.md).
+
+Эти файлы не покрыты лицензией MIT. Каждый распространяется по своей лицензии:
+CC BY 2.0/4.0, CC BY-SA 2.0/3.0/4.0, CC0 1.0 или public domain. При
+переиспользовании набора сохраняйте атрибуцию из `ATTRIBUTION.md`.

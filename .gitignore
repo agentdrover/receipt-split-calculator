@@ -3,9 +3,24 @@
 build/
 local.properties
 
+# IDE
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
 # локальные чеки для golden set
 .receipts/
 
 # Kotlin daemon: логи компиляции
 .kotlin/
-.review-delta.txt
+
+# ключи и настройки подписи релиза: в репозиторий не попадают
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+signing.properties
+release-key*

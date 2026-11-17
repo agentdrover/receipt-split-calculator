@@ -9,7 +9,11 @@ private class InMemorySecretStore : SecretStore {
     val values = mutableMapOf<String, String>()
 
     override fun get(key: String): String? = values[key]
-    override fun put(key: String, value: String) {
+
+    override fun put(
+        key: String,
+        value: String,
+    ) {
         values[key] = value
     }
 
@@ -19,12 +23,14 @@ private class InMemorySecretStore : SecretStore {
 }
 
 class SettingsRepositoryTest {
-
     private val store = InMemorySecretStore()
     private val repository = SettingsRepository(store)
 
-    private fun savePreset(preset: ProviderPreset, key: String, url: String = preset.defaultBaseUrl) =
-        repository.save(ProviderSettings(preset.id, key, url, preset.defaultModel))
+    private fun savePreset(
+        preset: ProviderPreset,
+        key: String,
+        url: String = preset.defaultBaseUrl,
+    ) = repository.save(ProviderSettings(preset.id, key, url, preset.defaultModel))
 
     @Test
     fun `по умолчанию активен DeepSeek с его адресом и моделью`() {
@@ -71,9 +77,10 @@ class SettingsRepositoryTest {
         savePreset(ProviderPreset.DEEPSEEK, "sk-deepseek-1111")
         savePreset(ProviderPreset.CUSTOM, "sk-custom-3333", "https://a.example/v1")
 
-        val result = repository.save(
-            ProviderSettings(ProviderPreset.CUSTOM.id, "sk-custom-3333", "https://b.example/v1", "m1"),
-        )
+        val result =
+            repository.save(
+                ProviderSettings(ProviderPreset.CUSTOM.id, "sk-custom-3333", "https://b.example/v1", "m1"),
+            )
 
         assertTrue((result as SaveResult.Saved).keyReentryRequired)
         assertTrue(repository.switchTo(ProviderPreset.CUSTOM).apiKey.isEmpty())
@@ -82,9 +89,10 @@ class SettingsRepositoryTest {
 
     @Test
     fun `http-адрес отклоняется и ключ не сохраняется`() {
-        val result = repository.save(
-            ProviderSettings(ProviderPreset.CUSTOM.id, "sk-test-1234", "http://evil.example/v1", "m1"),
-        )
+        val result =
+            repository.save(
+                ProviderSettings(ProviderPreset.CUSTOM.id, "sk-test-1234", "http://evil.example/v1", "m1"),
+            )
 
         assertTrue(result is SaveResult.InvalidUrl)
         assertTrue(repository.load().apiKey.isEmpty())
@@ -173,9 +181,10 @@ class SettingsRepositoryTest {
         store.values["api_key_custom"] = "sk-orphan-9999"
         store.values["base_url_custom"] = "https://a.example/v1"
 
-        val result = repository.save(
-            ProviderSettings(ProviderPreset.CUSTOM.id, "sk-orphan-9999", "https://a.example/v1", "m"),
-        )
+        val result =
+            repository.save(
+                ProviderSettings(ProviderPreset.CUSTOM.id, "sk-orphan-9999", "https://a.example/v1", "m"),
+            )
 
         assertTrue((result as SaveResult.Saved).keyReentryRequired)
         assertTrue(repository.load().apiKey.isEmpty())

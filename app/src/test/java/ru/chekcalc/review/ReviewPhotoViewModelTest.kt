@@ -6,7 +6,6 @@ import org.junit.Test
 import ru.chekcalc.ui.review.ReviewPhotoViewModel
 
 class ReviewPhotoViewModelTest {
-
     @Test
     fun `фото ставится и очищается`() {
         val model = ReviewPhotoViewModel()

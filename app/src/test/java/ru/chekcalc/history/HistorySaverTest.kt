@@ -15,19 +15,24 @@ import ru.chekcalc.ui.select.SelectionState
 import java.io.IOException
 
 class HistorySaverTest {
-
-    private fun entry(id: String, name: String = "Кофе"): HistoryEntry = HistoryEntry(
-        id = id,
-        createdAt = 1_700_000_000_000L,
-        merchant = "Кафе",
-        draft = ReceiptDraft(
-            items = listOf(DraftItem(1, name, 1.0, 10_000)),
-            totalKopecks = 10_000,
-        ),
-        selection = SelectionState(
-            items = listOf(SelectableItem(1, name, 10_000, Choice.Whole)),
-        ),
-    )
+    private fun entry(
+        id: String,
+        name: String = "Кофе",
+    ): HistoryEntry =
+        HistoryEntry(
+            id = id,
+            createdAt = 1_700_000_000_000L,
+            merchant = "Кафе",
+            draft =
+                ReceiptDraft(
+                    items = listOf(DraftItem(1, name, 1.0, 10_000)),
+                    totalKopecks = 10_000,
+                ),
+            selection =
+                SelectionState(
+                    items = listOf(SelectableItem(1, name, 10_000, Choice.Whole)),
+                ),
+        )
 
     /** Хранилище в памяти: новые записи сверху, как у настоящего HistoryStore. */
     private class MemoryStore {
@@ -141,7 +146,14 @@ class HistorySaverTest {
         val state = saver.submit(entry("a", name = "Новое имя"))
 
         assertEquals(1, state.pending.size)
-        assertEquals("Новое имя", state.pending.single().draft.items.single().name)
+        assertEquals(
+            "Новое имя",
+            state.pending
+                .single()
+                .draft.items
+                .single()
+                .name,
+        )
     }
 
     @Test

@@ -16,7 +16,6 @@ import java.nio.file.Files
 import java.util.UUID
 
 class HistoryStoreTest {
-
     private fun file() = Files.createTempDirectory("history-test").toFile().resolve("history.json")
 
     private fun entry(
@@ -24,29 +23,36 @@ class HistoryStoreTest {
         createdAt: Long = 1_700_000_000_000L,
         name: String = "Кофе",
         merchant: String = "Кафе",
-    ): HistoryEntry = HistoryEntry(
-        id = id,
-        createdAt = createdAt,
-        merchant = merchant,
-        draft = ReceiptDraft(
-            items = listOf(DraftItem(1, name, 1.0, 10_000)),
-            totalKopecks = 10_000,
-        ),
-        selection = SelectionState(
-            items = listOf(SelectableItem(1, name, 10_000, Choice.Whole)),
-        ),
-    )
+    ): HistoryEntry =
+        HistoryEntry(
+            id = id,
+            createdAt = createdAt,
+            merchant = merchant,
+            draft =
+                ReceiptDraft(
+                    items = listOf(DraftItem(1, name, 1.0, 10_000)),
+                    totalKopecks = 10_000,
+                ),
+            selection =
+                SelectionState(
+                    items = listOf(SelectableItem(1, name, 10_000, Choice.Whole)),
+                ),
+        )
 
-    private fun corrupt(target: File, text: String = "{ это не json") {
+    private fun corrupt(
+        target: File,
+        text: String = "{ это не json",
+    ) {
         target.parentFile?.mkdirs()
         target.writeText(text)
     }
 
-    private fun HistoryStore.entries(): List<HistoryEntry> =
-        (load() as HistoryLoad.Data).entries
+    private fun HistoryStore.entries(): List<HistoryEntry> = (load() as HistoryLoad.Data).entries
 
     private fun copiesOf(target: File): List<File> =
-        target.parentFile!!.listFiles().orEmpty()
+        target.parentFile!!
+            .listFiles()
+            .orEmpty()
             .filter { it.name.startsWith("${target.name}.corrupt") }
             .sortedBy { it.name }
 
@@ -261,10 +267,11 @@ class HistoryStoreTest {
     fun `срыв копирования не оставляет частичный файл`() {
         val file = file()
         corrupt(file)
-        val broken = HistoryStore(file, copyFile = { _, target ->
-            target.writeText("половина")
-            throw IOException("сбой посреди копирования")
-        })
+        val broken =
+            HistoryStore(file, copyFile = { _, target ->
+                target.writeText("половина")
+                throw IOException("сбой посреди копирования")
+            })
 
         assertTrue(broken.save(entry(id = "a")) is SaveOutcome.ReadFailure)
         assertEquals("{ это не json", file.readText())
