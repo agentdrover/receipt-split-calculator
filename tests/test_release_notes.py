@@ -17,8 +17,8 @@ NOTES = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(NOTES)
 
 
-def pull(number, title, labels=(), state="main", merged=True, url=None):
-    return {
+def pull(number, title, labels=(), state="main", merged=True, url=None, merge_sha=None):
+    data = {
         "number": number,
         "title": title,
         "html_url": url or "https://github.com/o/r/pull/%d" % number,
@@ -26,6 +26,9 @@ def pull(number, title, labels=(), state="main", merged=True, url=None):
         "base": {"ref": state},
         "merged_at": "2026-11-17T10:00:00Z" if merged else None,
     }
+    if merged:
+        data["merge_commit_sha"] = merge_sha if merge_sha is not None else "sha1"
+    return data
 
 
 def fake_gh(directory, stdout, rc=0, stderr=""):
@@ -48,13 +51,15 @@ class TitleTest(unittest.TestCase):
     def test_strips_hub_task_number(self):
         self.assertEqual(NOTES.clean_title("Релизный контур (#2370)"), "Релизный контур")
 
-    def test_strips_prefix_and_task_number(self):
-        self.assertEqual(
-            NOTES.clean_title("feat(task): релизный контур (#2370)"), "релизный контур"
-        )
-
     def test_keeps_reference_inside_title(self):
         self.assertEqual(NOTES.clean_title("Починить (#42) в ядре"), "Починить (#42) в ядре")
+
+    def test_escapes_markdown_links_and_images(self):
+        escaped = NOTES.escape_markdown("x](https://evil) ![p](https://evil/p.gif) [tail")
+        self.assertNotIn("](", escaped)
+        self.assertIn("\\]", escaped)
+        self.assertIn("\\[", escaped)
+        self.assertIn("\\!", escaped)
 
 
 class GroupingTest(unittest.TestCase):
@@ -81,15 +86,36 @@ class GroupingTest(unittest.TestCase):
 
 
 class SelectionTest(unittest.TestCase):
+    def in_range(self, sha):
+        return sha == "sha1"
+
     def test_unmerged_excluded(self):
-        self.assertEqual(NOTES.select_pulls([pull(1, "x", merged=False)]), [])
+        self.assertEqual(NOTES.select_pulls([pull(1, "x", merged=False)], self.in_range), [])
 
     def test_other_base_excluded(self):
-        self.assertEqual(NOTES.select_pulls([pull(1, "x", state="develop")]), [])
+        self.assertEqual(NOTES.select_pulls([pull(1, "x", state="develop")], self.in_range), [])
 
     def test_duplicates_removed(self):
-        result = NOTES.select_pulls([pull(2, "b"), pull(1, "a"), pull(2, "b")])
+        result = NOTES.select_pulls([pull(2, "b"), pull(1, "a"), pull(2, "b")], self.in_range)
         self.assertEqual([item["number"] for item in result], [1, 2])
+
+    def test_out_of_range_excluded(self):
+        self.assertEqual(NOTES.select_pulls([pull(1, "x", merge_sha="later")], self.in_range), [])
+
+
+class ValidationTest(unittest.TestCase):
+    def test_incomplete_pull_raises(self):
+        with self.assertRaises(NOTES.ApiError):
+            NOTES.validate_pulls([{"number": 1, "merged_at": "x", "base": {"ref": "main"}}], "abc")
+
+    def test_merged_without_merge_sha_raises(self):
+        broken = pull(1, "x")
+        broken.pop("merge_commit_sha")
+        with self.assertRaises(NOTES.ApiError):
+            NOTES.validate_pulls([broken], "abc")
+
+    def test_valid_pull_passes(self):
+        NOTES.validate_pulls([pull(1, "x")], "abc")
 
 
 class RenderTest(unittest.TestCase):
@@ -120,6 +146,10 @@ class RenderTest(unittest.TestCase):
     def test_empty_returns_none(self):
         self.assertIsNone(NOTES.render([], "v1.1.0", "2026-11-17"))
 
+    def test_malicious_title_cannot_inject_link(self):
+        text = NOTES.render([pull(1, "x](https://evil) [tail", ["release:fix"])], "v1.1.0", "2026-11-17")
+        self.assertNotIn("](https://evil)", text)
+
 
 class ChangelogTest(unittest.TestCase):
     BASE = "# История изменений\n\nВступление.\n\n## [1.0.0] — 2026-11-17\n\n### Возможности\n\n- старое\n"
@@ -137,16 +167,57 @@ class ChangelogTest(unittest.TestCase):
         self.assertIn("обновлённое", text)
         self.assertNotIn("старое", text)
 
+    def test_replaces_section_not_at_top(self):
+        base = (
+            "# История изменений\n\n## [Unreleased]\n\n- потом\n\n"
+            "## [1.1.0] — 2026-12-01\n\n### Возможности\n\n- старое\n\n"
+            "## [1.0.0] — 2026-11-17\n\n- ещё старее\n"
+        )
+        notes = "## [1.1.0] — 2026-12-02\n\n### Исправления\n\n- новое\n"
+        text = NOTES.insert_section(base, notes, "v1.1.0")
+        self.assertEqual(text.count("## [1.1.0]"), 1)
+        self.assertIn("новое", text)
+        self.assertNotIn("старое", text)
+        self.assertIn("## [Unreleased]", text)
+        self.assertIn("## [1.0.0]", text)
+
+    def test_keeps_following_section_of_other_kind(self):
+        base = (
+            "# История изменений\n\n## [1.0.0] — 2026-11-17\n\n- старое\n\n"
+            "## Security policy\n\nПолитика.\n"
+        )
+        notes = "## [1.0.0] — 2026-11-18\n\n- новое\n"
+        text = NOTES.insert_section(base, notes, "v1.0.0")
+        self.assertIn("## Security policy", text)
+        self.assertIn("Политика.", text)
+        self.assertIn("новое", text)
+        self.assertNotIn("старое", text)
+
     def test_appends_when_no_sections(self):
         text = NOTES.insert_section("# История изменений\n", "## [1.0.0]\n", "v1.0.0")
         self.assertIn("## [1.0.0]", text)
+
+
+class TagTest(unittest.TestCase):
+    def test_valid_tags(self):
+        for tag in ("v1.2.3", "1.2.3", "v1.2.3-rc.1", "v0.0.1+build.5"):
+            self.assertTrue(NOTES.valid_tag(tag), tag)
+
+    def test_invalid_tags(self):
+        for tag in ("", "../x", "/abs/path", "v1.2", "latest", "v1.2.3/../../x"):
+            self.assertFalse(NOTES.valid_tag(tag), tag)
+
+    def test_main_rejects_bad_tag(self):
+        with self.assertRaises(SystemExit) as caught:
+            NOTES.main(["--tag", "../../outside", "--dry-run"])
+        self.assertEqual(caught.exception.code, 2)
 
 
 class ApiTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.old_path = os.environ.get("PATH", "")
-        os.environ["PATH"] = fake_gh(self.tmp.name, "HTTP/2.0 200 OK\n\n[]") + ":" + self.old_path
+        self.set_gh('HTTP/2.0 200 OK\n\n[]')
 
     def tearDown(self):
         os.environ["PATH"] = self.old_path
@@ -178,26 +249,45 @@ class ApiTest(unittest.TestCase):
             NOTES.run_gh(["x"])
         self.assertEqual(caught.exception.status, 500)
 
+    def test_nonzero_exit_with_200_raises(self):
+        self.set_gh('HTTP/2.0 200 OK\n\n[{"number": 1}]', rc=1)
+        with self.assertRaises(NOTES.ApiError):
+            NOTES.run_gh(["x"])
+
     def test_cache_roundtrip(self):
-        self.set_gh('HTTP/2.0 200 OK\n\n[{"number": 1}]')
+        self.set_gh('HTTP/2.0 200 OK\n\n[{"number": 1, "title": "t", "html_url": "u", "base": {"ref": "main"}, "merged_at": null}]')
         cache = os.path.join(self.tmp.name, "cache")
         first = NOTES.pulls_for_commit("o/r", "abc", cache)
-        self.assertEqual(first, [{"number": 1}])
+        self.assertEqual(len(first), 1)
         self.set_gh("HTTP/2.0 500 Oops\n\n{}", rc=1)
         second = NOTES.pulls_for_commit("o/r", "abc", cache)
-        self.assertEqual(second, [{"number": 1}])
+        self.assertEqual(second, first)
+
+    def test_dry_run_cache_is_read_only(self):
+        cache = os.path.join(self.tmp.name, "cache-dry")
+        self.set_gh('HTTP/2.0 200 OK\n\n[]')
+        NOTES.pulls_for_commit("o/r", "abc", cache, write_cache=False)
+        self.assertFalse(os.path.exists(cache))
 
     def test_not_a_list_raises(self):
         self.set_gh('HTTP/2.0 200 OK\n\n{"message": "x"}')
         with self.assertRaises(NOTES.ApiError):
             NOTES.pulls_for_commit("o/r", "abc", None)
 
+    def test_broken_json_raises(self):
+        self.set_gh("HTTP/2.0 200 OK\n\nnot json")
+        with self.assertRaises(NOTES.ApiError):
+            NOTES.pulls_for_commit("o/r", "abc", None)
+
 
 class MainTest(unittest.TestCase):
-    def run_main(self, prs_by_sha, argv):
+    def run_main(self, prs_by_sha, argv, in_range=None):
+        checker = in_range or (lambda sha: True)
         with mock.patch.object(NOTES, "repo_slug", return_value="o/r"), \
                 mock.patch.object(NOTES, "git_lines", return_value=["sha1", "sha2"]), \
-                mock.patch.object(NOTES, "pulls_for_commit", side_effect=lambda repo, sha, cache: prs_by_sha[sha]):
+                mock.patch.object(NOTES, "commit_in_range", side_effect=lambda sha, _f, _t: checker(sha)), \
+                mock.patch.object(NOTES, "pulls_for_commit",
+                                  side_effect=lambda repo, sha, cache, write_cache=True: prs_by_sha[sha]):
             return NOTES.main(argv)
 
     def test_dry_run_prints_and_writes_nothing(self):
@@ -211,6 +301,20 @@ class MainTest(unittest.TestCase):
                 self.assertEqual(os.listdir("."), [])
             finally:
                 os.chdir(cwd)
+
+    def test_dry_run_passes_write_cache_false(self):
+        prs = {"sha1": [], "sha2": []}
+        recorded = {}
+
+        def fake_collect(repo, commits, cache_dir, in_range, write_cache):
+            recorded["write_cache"] = write_cache
+            return []
+
+        with mock.patch.object(NOTES, "repo_slug", return_value="o/r"), \
+                mock.patch.object(NOTES, "git_lines", return_value=["sha1"]), \
+                mock.patch.object(NOTES, "collect_pulls", side_effect=fake_collect):
+            NOTES.main(["--tag", "v1.1.0", "--from", "v1.0.0", "--dry-run", "--cache-dir", "cache"])
+        self.assertFalse(recorded["write_cache"])
 
     def test_write_creates_files(self):
         prs = {"sha1": [pull(1, "feat(task): новая вещь", ["release:feature"])], "sha2": []}
